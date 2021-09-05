@@ -27,7 +27,7 @@
 #include "tree.h"
 
 #define TAGNAVI_VERSION    "#! rockbox/tagbrowser/2.0"
-#define TAGMENU_MAX_ITEMS  64
+#define TAGMENU_MAX_ITEMS 128
 #define TAGMENU_MAX_MENUS 128
 #define TAGMENU_MAX_FMTS   32
 
