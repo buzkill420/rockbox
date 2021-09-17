@@ -1,0 +1,88 @@
+# Theme by Guillaume Cocatre-Zilgien <gcocatre@gmail.com>
+# CC-BY-SA
+
+# Disable Status Bar
+%wd
+
+# Clear Backdrop
+%X(d)
+
+# Preload Font
+%Fl(2,14-Nimbus.fnt)
+
+# Preload Images
+%xl(battery,battery.bmp,0,0,5)
+%xl(batteryCharging,batteryCharging.bmp,0,0,5)
+%xl(playmodes,playmodes.bmp,0,0,9)
+
+# Display Viewports
+%Vd(diskon)
+%?if(%mp, =, 1)<%?if(%bc,=,c)<%Vd(usb)|%?if(%bp,=,p)<%Vd(usb)|%Vd(playbackmode)>>|%Vd(playbackmode)>
+%?if(%St(battery display),=,numeric)<%Vd(batteryn)|%?if(%bc,=,c)<%?if(%mh,=,h)<%Vd(batteryn)|%Vd(batteryc)>|%?if(%bp,=,p)<%?if(%mh,=,h)<%Vd(batteryn)|%Vd(batteryc)>|%?if(%mh,=,h)<%Vd(batteryn)|%Vd(batteryg)>>>>
+%?if(%mh,=,h)<%Vd(hold)%Vd(titleHold)|%?if(%Lt,=,themes)<%Vd(themetitle)|%?if(%cs,=,3)<%Vd(recording)|%?bs<%Vd(title_thin)|%Vd(title_thick)>>>>
+%?if(%bs,>,0)<%Vd(timer)>
+%Vd(topbar)
+
+# Playback Mode Icons
+%Vl(playbackmode,6,6,13,13,-)
+%xd(playmodes,%mp)
+
+# USB
+%Vl(usb,2,7,22,14,2)
+%alUSB
+
+# HOLD
+%Vl(hold,31,6,12,13,-)
+%x(holdingIcon,holdIcon.bmp,0,0)
+
+#Sleep Timer Icon
+%Vl(timer,50,6,12,13,-)
+%x(timerIcon,timer.bmp,0,0)
+
+# Menu Title THICK
+%Vl(title_thick,40,3,240,19,-)
+#MODIFY TITLE BAR
+%s%ac%?Lt<%?if(%Lt,=,Rockbox)<%?if(%mp,=,1)<iPod|%?if(%mp,=,2)<Now Playing|%?if(%mp,=,3)<Paused|%Lt>>>|%?if(%Lt,=,Database)<Music|%?if(%Lt,=,Playlists         )<Playlists|%?if(%Lt,=,Artist)<Artists|%?if(%Lt,=,Album)<Albums|%?if(%Lt,=,Album Artist)<Album Artists|%?if(%Lt,=,Genre)<Genres|%?if(%Lt,=,Composer)<Composers|%?if(%Lt,=,Year)<Year Released|%?if(%Lt,=,Track)<Tracks|%?if(%Lt,=,Play history)<Play History|%Lt>>>>>>>>>>>>
+
+# Menu Title THIN
+%Vl(title_thin,65,3,215,19,-)
+#MODIFY TITLE BAR
+%s%ac%?Lt<%?if(%Lt,=,Rockbox)<%?if(%mp,=,1)<iPod|%?if(%mp,=,2)<Now Playing|%?if(%mp,=,3)<Paused|%Lt>>>|%?if(%Lt,=,Database)<Music|%?if(%Lt,=,Playlists         )<Playlists|%?if(%Lt,=,Artist)<Artists|%?if(%Lt,=,Album)<Albums|%?if(%Lt,=,Album Artist)<Album Artists|%?if(%Lt,=,Genre)<Genres|%?if(%Lt,=,Composer)<Composers|%?if(%Lt,=,Year)<Year Released|%?if(%Lt,=,Track)<Tracks|%?if(%Lt,=,Play history)<Play History|%Lt>>>>>>>>>>>>
+
+# Recording Screen HOLD
+%Vl(recording,40,3,240,19,-)
+%ac%s%?if(%mp,=,1)<***  Press PLAY to START Recording  ***  Press MENU to Exit|%?if(%mp,=,6)<***  Press SELECT to RESTART Recording  ***  Press PLAY to PAUSE Recording  ***  Press MENU to SAVE RECORDING|%?if(%mp,=,7)<***  Press SELECT to RESTART Recording  ***  Press PLAY to CONTINUE Recording  ***  Press MENU to SAVE RECORDING|%Lt>>>
+
+
+# Menu Title HOLD
+%Vl(titleHold,63,3,200,19,-)
+%?if(%mh,=,h)<%?cc<%ac%?cf<%cH:%cM|%cl:%cM %cP>|%ac%?mp<|Now Playing|Paused|Seeking|Seeking|Rec|Rec pause|FM|FM pause>>>
+
+ 
+# Theme Menu Title
+%Vl(themetitle,40,3,240,19,-)
+%acPodOne
+
+# Battery (graphical)
+%Vl(batteryg,289,6,25,13,-)
+%?if(%bl, >, 88)<%xd(battery,5)|%?if(%bl, >, 63)<%xd(battery,4)|%?if(%bl, >, 38)<%xd(battery,3)|%?if(%bl, >, 13)<%xd(battery,2)|%xd(battery,1)>>>>
+
+# Battery Charging (graphical)
+%Vl(batteryc,284,2,30,17,-)
+%?if(%bl, >, 88)<%xd(batteryCharging,5)|%?if(%bl, >, 63)<%xd(batteryCharging,4)|%?if(%bl, >, 38)<%xd(batteryCharging,3)|%?if(%bl, >, 13)<%xd(batteryCharging,2)|%xd(batteryCharging,1)>>>>
+
+
+# Battery (numerical)/Charging
+%Vl(batteryn,280,7,34,14,2)
+%ar%bl%%
+
+# HDD Busy
+%Vl(diskon,-31,2,23,1,-)
+%dr(0,0,-,-)
+
+# Top Bar Separator Line
+%Vl(topbar,0,25,320,2,-)
+%dr(0,0,320,2)
+
+# Menu
+%Vi(-,0,29,320,209,-)

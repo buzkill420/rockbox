@@ -1,0 +1,137 @@
+# Theme by Guillaume Cocatre-Zilgien <gcocatre@gmail.com>
+# CC-BY-SA
+
+# Disable Status Bar
+%wd
+
+# Clear Backdrop
+%X(d)
+
+# Preload Font
+%Fl(2,14-Nimbus.fnt)
+
+# Preload Images
+%xl(battery,battery.bmp,0,0,5)
+%xl(batteryCharging,batteryCharging.bmp,0,0,5)
+%xl(playmodes,playmodes.bmp,0,0,9)
+%xl(repeatIcons,repeatMode.bmp,0,0,4)
+%xl(speakerIcons,speaker.bmp,0,0,9)
+%xl(pbbd,progressbar_backdrop.bmp,0,0)
+
+# Display Viewports
+%Vd(playbackmode)
+%?if(%St(battery display), =, numeric)<%Vd(batteryn)|%?if(%bc, =, c)<%?if(%mh,=,h)<%Vd(batterync)|%Vd(batteryc)>|%?if(%bp, =, p)<%?if(%mh,=,h)<%Vd(batterync)|%Vd(batteryc)>|%?if(%mh,=,h)<%Vd(batteryn)|%Vd(batteryg)>>>>
+%?if(%mh,=,h)<%Vd(hold)%Vd(titleHold)|%?bs<%Vd(title_thin)|%Vd(title_thick)>>
+%Vd(topbar)
+%Vd(metadata)
+%Vd(artist)
+%?mv<%Vd(volume)|%Vd(trackpos)>
+%?if(%ps, =, s)<%Vd(shuffle)>
+%?if(%mm,!=,1)<%Vd(repeat)>
+%?if(%bs,>,0)<%Vd(timer)>
+#%?if(%mp, =, 3)<%Vd(next_track)|>
+
+# Repeat Icons
+%Vl(repeat,14,48,19,9,-)
+%ar%?mm<|%xd(repeatIcons,1)|%xd(repeatIcons,2)|%xd(repeatIcons,3)|%xd(repeatIcons,4)>
+
+# Shuffle Icon
+%Vl(shuffle,295,32,13,11,-)
+%x(shuffleIcon,shuffleIcon.bmp,0,0)
+
+# Playback Mode Icons
+%Vl(playbackmode,6,6,13,13,-)
+%xd(playmodes,%mp)
+
+#Sleep Timer Icon
+%Vl(timer,50,6,12,13,-)
+%x(timerIcon,timer.bmp,0,0)
+
+# WPS Title Thick
+%Vl(title_thick,40,3,240,19,-)
+%ac%?mp<|Now Playing|Paused|Seeking|Seeking|Rec|Rec pause|FM|FM pause>
+
+# WPS Title Thin
+%Vl(title_thin,65,3,215,19,-)
+%ac%?mp<|Now Playing|Paused|Seeking|Seeking|Rec|Rec pause|FM|FM pause>
+
+# WPS Title HOLD
+%Vl(titleHold,63,3,200,19,-)
+%?if(%mh,=,h)<%?cc<%ac%?cf<%cH:%cM|%cl:%cM %cP>|%ac%?mp<|Now Playing|Paused|Seeking|Seeking|Rec|Rec pause|FM|FM pause>>>
+
+# HOLD
+%Vl(hold,31,6,13,13,-)
+%x(holdingIcon,holdIcon.bmp,0,0)
+
+# Battery (graphical)
+%Vl(batteryg,289,6,25,13,-)
+%?if(%bl, >, 88)<%xd(battery,5)|%?if(%bl, >, 63)<%xd(battery,4)|%?if(%bl, >, 38)<%xd(battery,3)|%?if(%bl, >, 13)<%xd(battery,2)|%xd(battery,1)>>>>
+
+# Battery Charging (graphical)
+%Vl(batteryc,284,2,30,17,-)
+%?if(%bl, >, 88)<%xd(batteryCharging,5)|%?if(%bl, >, 63)<%xd(batteryCharging,4)|%?if(%bl, >, 38)<%xd(batteryCharging,3)|%?if(%bl, >, 13)<%xd(batteryCharging,2)|%xd(batteryCharging,1)>>>>
+
+
+# Battery (numerical)
+%Vl(batteryn,280,7,34,14,2)
+%ar%bl%%
+
+# Battery Charging (numerical)
+%Vl(batterync,280,7,34,14,2)
+%ar%bl%%
+
+# Top Bar Separator Line
+%Vl(topbar,0,25,320,2,-)
+%dr(0,0,320,2)
+
+# Playlist Entry
+%Vl(metadata,6,32,200,14,2)
+%al%pp of %pe
+
+#CURRENT TRACK INFO
+
+# Disc and Track Number
+%Vl(metadata,6,147,308,19,2)
+%s%ac%?ik<Disc %ik %| %?in<Track %in|Entry %pp>|%?in<Track %in|Entry %pp>>
+
+# Track Title or Filename
+%Vl(metadata,6,72,308,19,-)
+%s%ac%?it<“%it”|%fn>
+
+# Artist or Album Artist
+%Vl(artist,6,97,308,19,-)
+%s%ac%?ia<by %ia|%?iA<by %iA|Unknown Artist>>
+
+
+# Album Title and Year
+%Vl(metadata,6,122,308,19,-)
+%s%ac%?id<%id|Untitled Album>%?iy< %| %iy|>
+
+
+#NEXT TRACK INFO
+
+%Vl(next_track,0,165,-,19,-)
+%?It<%s%acNext Track: '%It'%?Ia< by '%Ia'|'Unknown Artist'>>
+
+
+# Track Position
+%Vl(trackpos,1,205,60,19,-)
+%ac%pc
+%Vl(trackpos,256,205,60,19,-)
+%ac%pt
+
+# Progress Bar
+%Vl(trackpos,63,205,191,17,-)
+%pb(0,0,191,17,progressbar.bmp,backdrop,pbbd)
+
+# Volume
+%Vl(volume,0,185,-,19,-)
+%ac%?if(%pv, >, 0)<+|>%pvdB
+%Vl(volume,42,207,26,14,-)
+%xd(speakerIcons,2)
+%Vl(volume,265,207,26,14,-)
+%xd(speakerIcons,8)
+
+# Volume Bar
+%Vl(volume,63,205,191,17,-)
+%pv(0,0,191,17,progressbar.bmp,backdrop,pbbd)
