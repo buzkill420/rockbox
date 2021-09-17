@@ -1,0 +1,30 @@
+# Machine-generated content.
+# Check out "Flattery-SBS-Human-Readable.txt" for the nicely formatted and more easily readable version of this file!
+#
+#
+
+#FONTS
+%Fl(2,10-Nimbus.fnt)
+%Fl(3,12-Nimbus.fnt)
+
+
+#BITMAPS
+%xl(B,batteryStatus.bmp,3,2,16)
+%xl(C,batteryChargingStatus.bmp,3,2,13)
+%xl(P,playerStatus.bmp,0,0,4)
+%xl(H,holdSlider.bmp,0,2)
+%xl(U,timerPadded.bmp,3,2)
+%xl(L,speaker.bmp,2,3,9)
+
+
+#VIEWS
+%VI(view_main_padded_top)
+%?lh<%Vd(diskon)>
+%?or(%if(%ss(0, 4, %St(wps)), =,Flat),%if(%cs, !=, 2))<%Vd(view_bar_padded_top)>%?and(%if(%cs, =, 10),%if(%mv(2), =, v))<%Vd(view_speakericon)%?and(%if(%St(eq enabled), =, off),%if(%St(channels), =, stereo),%if(%St(crossfeed), =, off),%if(%St(balance), =, 101),%or(%and(%if(%St(bass), =, 7),%if(%St(treble), =, 7)),%and(%if(%St(bass), =, 25),%if(%St(treble), =, 25)),%and(%if(%St(bass), =, 0),%if(%St(treble), =, 0))))<%Vd(view_volumebar)|%?or(%and(%if(%St(bass), =, 7),%if(%St(treble), =, 7)),%and(%if(%St(bass), =, 25),%if(%St(treble), =, 25)),%and(%if(%St(bass), =, 0),%if(%St(treble), =, 0)))<%?if(%St(eq enabled),=,on)<%Vd(x_statusBarTop)>|%Vd(x_statusBarTop)>%?or(%if(%St(channels), !=, stereo),%if(%St(crossfeed), !=, off))<%Vd(c_statusBarTop)|%Vd(c_statusBarTop_erase)>%?if(%St(balance), !=, 101)<%Vd(l_statusBarTop)>>|%Vd(view_status)%?if(%St(battery display), =, numeric)<%Vd(view_numericalBatteryLevel_padded_top)|%?if(%mh,=,h)<%Vd(view_numericalBatteryLevel_padded_top)|%Vd(view_graphicalBatteryLevel_padded_top)>>%?bs<%?or(%if(%St(wps), !=,CoverMax-XL),%if(%cs, !=, 2))<%Vd(timer)>%?or(%if(%mh, =, h),%if(%cs, =, 2))<%?if(%mh,=,h)<%Vd(view_currentTime_padded_top)|%Vd(view_shorttitle_padded_top)>|%Vd(view_shorttitle_padded_top)>|%?or(%if(%ss(0, 4, %St(wps)), =,Flat),%if(%cs, !=, 2))<%?and(%if(%mh, =, h),%if(%cc, =, c))<%Vd(view_currentTime_padded_top)|%Vd(view_longtitle_padded_top)>|%?or(%if(%St(wps), =,Minimally),%if(%St(wps), =,CoverMin),%if(%St(wps), =,Coverly))<%Vd(view_eraseTimerText_padded_top)>>>>%Vl(diskon,-25,0,21,1,-)%dr(0,0,-,-,1) %Vl(view_numericalBatteryLevel_padded_top,-30,4,28,12,2)%Vf(0)%Vb(3)%ar%bl%%%Vl(view_bar_padded_top,0,18,-,1,-)%dr(0,0,-,-,0)%Vi(view_main_padded_top,0,20,160,108,-)%Vf(0)%Vb(3)%Vl(view_speakericon,0,0,20,15,-)%Vf(0)%Vb(3)%?pv<%xd(La)|%xd(Lb)|%xd(Lc)|%xd(Ld)|%xd(Le)|%xd(Lf)|%xd(Lg)|%xd(Lh)|%xd(Lh)|%xd(Lh)|%xd(Li)>%Vl(view_volumebar,20,0,-2,17,-)%pv(0,5,-,8, noborder)%Vl(l_statusBarTop,20,4,26,10,2)%Vf(3)%Vb(0)%acBAL%Vl(c_statusBarTop,53,4,70,10,2)%Vf(3)%Vb(0)%ac%?if(%St(channels), =, stereo)<%t(0)|%St(channels)>;%?if(%St(crossfeed), =, off)<%t(0)|%accrossfeed>%Vl(c_statusBarTop,46,0,84,4,-)%Vf(0)%Vb(3) %Vl(c_statusBarTop,46,14,84,4,-)%Vf(0)%Vb(3) %Vl(c_statusBarTop_erase,46,0,84,18,-)%Vf(0)%Vb(3) %Vl(x_statusBarTop,130,4,25,10,2)%Vf(3)%Vb(0)%ac%?if(%St(eq enabled),=,on)<EQ|%?and(%if(%St(bass), !=, 7),%if(%St(treble), !=, 7),%if(%St(bass), !=, 25),%if(%St(treble), !=, 25),%if(%St(bass), !=, 0),%if(%St(treble), !=, 0))<T/B|%?and(%if(%St(treble), !=, 7),%if(%St(treble), !=, 25),%if(%St(treble), !=, 0))<TRE>%?and(%if(%St(bass), !=, 7),%if(%St(bass), !=, 25),%if(%St(bass), !=, 0))<BAS>>>%Vl(view_graphicalBatteryLevel_padded_top,-30,2,28,12,-)%?bp<%?bl<%xd(Ca)|%xd(Cb)|%xd(Cc)|%xd(Cd)|%xd(Ce)|%xd(Cf)|%xd(Cg)|%xd(Ch)|%xd(Ci)|%xd(Cj)|%xd(Ck)|%xd(Cl)|%xd(Cm)>|%?bl<%xd(Ba)|%xd(Bb)|%xd(Bc)|%xd(Bd)|%xd(Be)|%xd(Bf)|%xd(Bg)|%xd(Bh)|%xd(Bi)|%xd(Bj)|%xd(Bk)|%xd(Bl)|%xd(Bm)|%xd(Bn)|%xd(Bo)|%xd(Bp)>>%Vl(view_status,0,2,20,12,-)%?mp<|%xd(Pa)|%xd(Pb)|%xd(Pc)|%xd(Pd)|>%Vl(view_status,20,1,11,13,-)%?mh<%xd(H)>%Vl(view_longtitle_padded_top,30,4,100,14,2)%Vf(0)%Vb(3)%s%ac%?cs<%?mp<iPod|Now Playing|Paused|Seeking...|Seeking...>|%?mp<iPod|Now Playing|Paused|Seeking...|Seeking...>|%?if(%cs,=,3)<%?if(%mp,=,1)<***  Press PLAY to START Recording  ***  Press MENU to Exit|%?if(%mp,=,6)<***  Press SELECT to RESTART Recording  ***  Press PLAY to PAUSE Recording  ***  Press MENU to SAVE RECORDING|%?if(%mp,=,7)<***  Press SELECT to RESTART Recording  ***  Press PLAY to CONTINUE Recording  ***  Press MENU to SAVE RECORDING|%Lt>>>>|FM Radio|%Lt|%?if(%Lt, =,themes)<Flattery|%Lt>|%Lt|%?if(%Lt, =,Database)<Music|%?if(%Lt, =,Artist)<Artists|%?if(%Lt, =,Album)<Albums|%?if(%Lt, =,Album Artist)<Album Artists|%?if(%Lt, =,Genre)<Genres|%?if(%Lt, =,Composer)<Composers|%?if(%Lt, =,Track)<Tracks|%?if(%Lt, =,Year)<Year Realeased|%Lt>>>>>>>>|Extras|%?cc<%?cf<%cH:%cM|%cl:%cM %cP>>%?if(%St(battery display), =, graphic)<%?cc< - >%?if(%bl, =, 100)<%bl%%|%?if(%bl, =, 99)<%bl%%|%bl%%>>>|%Lt|%Lt|%?if(%cs, =,13)<Playlists|%Lt>|%Lt|%?if(%Lt, =,Context Menu)<Perform Action...|%Lt>|%Lt|%Lt|%Lt|%Lt|%Lt|%?mp<iPod|Now Playing|Paused|Seeking...|Seeking...>|iPod>%Vl(view_shorttitle_padded_top,46,4,84,14,2)%Vf(0)%Vb(3)%s%ac%?cs<%?mp<iPod|Now Playing|Paused|Seeking...|Seeking...>|%?mp<iPod|Now Playing|Paused|Seeking...|Seeking...>|Recording|FM Radio|%Lt|%Lt|%Lt|%Lt|%Lt|%?cc<%?cf<%cH:%cM|%cl:%cM %cP>>%?if(%St(battery display), =, graphic)<%?cc< - >%?if(%bl, =, 100)<%bl%%|%?if(%bl, =, 99)<%bl%%|%bl%%>>>|%Lt|%Lt|%Lt|%Lt|%?if(%Lt, =,Context Menu)<Perform Action...|%Lt>|%Lt|%Lt|%Lt|%Lt|%Lt|%?mp<iPod|Now Playing|Paused|Seeking...|Seeking...>|iPod>%Vl(view_currentTime_padded_top,50,4,65,14,2)%Vf(0)%Vb(3)%ac%?cf<%cH:%cM|%cl:%cM %cP>%Vl(view_timerText_padded_top,44,4,6,14,2)%Vf(0)%Vb(3)%Vl(view_timerText_padded_top,50,4,60,14,2)%Vf(3)%Vb(0)%ac%bs%Vl(view_timerText_padded_top,110,4,-30,14,2)%Vf(0)%Vb(3)%Vl(view_eraseTimerText_padded_top,50,4,60,14,2)%Vf(0)%Vb(3)
+
+# TIMER
+%Vl(timer,32,3,8,10,-)
+%x(timerIcon,timer.bmp,0,0)
+
+#%Vl(diskon,20,1,21,1,-)
+#%dr(0,0,-,-,1)

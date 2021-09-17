@@ -1,0 +1,28 @@
+# Machine-generated content.
+# Check out "Flattery-WPS-Human-Readable.txt" for the nicely formatted and more easily readable version of this file!
+#
+#
+%Fl(2,10-Nimbus.fnt)%Fl(3,12-Nimbus.fnt)
+%xl(M,speakerMute.bmp,0,0)
+%xl(L,speakerLoudest.bmp,0,0)
+%xl(R,repeatMode.bmp,0,0,4)
+%xl(S,shuffle.bmp,15,1)
+%xl(bdv,volumeBarBackdrop.bmp,0,0)
+%xl(bdp,progressBarBackdrop.bmp,0,0)
+%xl(bdps,progressBarShortBackdrop.bmp,0,0)
+
+%?if(%St(wps), =,FlatCover)<%?C<%Vd(songinfoc)%Vd(cover)|%Vd(songinfo)>|%?if(%ig, =, Chamber Music)<%Vd(composer)|%?if(%ig, =, Classical)<%Vd(composer)|%?if(%ig, =, Opera)<%Vd(composer)|%?if(%ig, =, Sonata)<%Vd(composer)|%?if(%ig, =, Symphony)<%Vd(composer)|%Vd(artist)>>>>>%Vd(metadata)>%?mv(2)<%?if(%St(volume display), =, numeric)<%Vd(vnum)|%Vd(m)%Vd(v)%Vd(l)%Vd(db)>|%?if(%St(wps), =,Flattery-B)<%Vd(shortelapsed)%Vd(shortprogress)|%Vd(e)%Vd(p)%Vd(r)>>%V(4,22,120,10,2)%Vf(0)%Vb(3) %al%pp %Sx(of) %pe%V(-37,23,24,9,2)%Vf(0)%Vb(3)%?mm<|%xd(Ra)|%xd(Rb)|%xd(Rc)|%xd(Rd)>%V(-30,23,24,9,2)%Vf(0)%Vb(3)
+%?if(%ps, =, s)<%xd(S)|>%Vl(m,9,100,14,12,-)%xd(M)%Vl(v,19,101,120,9,-)%pv(0,0,120,9,volumeBar.bmp,backdrop,bdv)%Vl(l,-19,100,14,12,-)%xd(L)%Vl(vnum,0,101,160,10,2)%Vf(0)%Vb(3)%ac%pv dB%Vl(p,8,101,144,9,-)%pb(0,0,144,9,progressBar.bmp,backdrop,bdp)%Vl(e,8,112,72,14,3)%al%pc%Vl(r,-80,112,72,14,3)%ar-%pt%Vl(shortprogress,42,101,110,9,-)%pb(0,0,110,9,progressBarShort.bmp,backdrop,bdps)%Vl(shortelapsed,0,99,37,14,3)%ar%pc%Vl(cover,5,40,46,48,-)%Cl(0,0,46,46,c,c)%Cd%Vl(songinfoc,55,40,105,14,3)%s%al%?it<%it|%fn>%Vl(songinfoc,55,56,105,14,3)%s%al%?if(%ig,=,Classical)<%?ic<By %ic - >%ia|%ia>%Vl(songinfoc,55,72,105,14,3)%s%al%id%Vl(songinfo,0,40,160,14,3)%s%ac%?it<%it|%fn>%Vl(songinfo,0,56,160,14,3)%s%ac%?if(%ig,=,Classical)<%?ic<By %ic - >%ia|%ia>%Vl(songinfo,0,72,160,14,3)%s%ac%id
+%Vl(db,0,113,-,14,-)
+%ac%?if(%pv, >, 0)<+|>%pvdB
+
+%Vl(metadata,0,38,160,14,3)
+%s%ac%?it<"%it"|%fn>
+%Vl(composer,0,53,160,14,2)
+%s%ac%?ic<by %ic|%?ia<by %ia|%?iA<by %iA|Unknown Artist>>>
+%Vl(artist,0,53,160,14,2)
+%s%ac%?ia<by %ia|%?iA<by %iA|Unknown Artist>>
+%Vl(metadata,0,67,160,14,2)
+%s%ac%?id<%id|Untitled Album>%?iy< %| %iy|>
+%Vl(metadata,0,81,160,14,2)
+%s%ac%?ik<Disc %ik %| %?in<Track %in|Entry %pp>|%?in<Track %in|Entry %pp>>
