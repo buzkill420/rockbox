@@ -74,7 +74,7 @@
 %ar%bl%%
 
 # HDD Busy
-%Vl(diskon,-31,2,22,1,-)
+%Vl(diskon,-31,2,23,1,-)
 %dr(0,0,-,-)
 
 # Top Bar Separator Line
