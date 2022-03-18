@@ -78,6 +78,19 @@ void power_init(void)
     cw2015_init();
 #endif
 
+    /* Set lowest sample rate */
+    axp_adc_set_rate(AXP_ADC_RATE_25HZ);
+
+    /* Enable required ADCs */
+    axp_adc_set_enabled(
+        (1 << ADC_BATTERY_VOLTAGE) |
+        (1 << ADC_CHARGE_CURRENT) |
+        (1 << ADC_DISCHARGE_CURRENT) |
+        (1 << ADC_VBUS_VOLTAGE) |
+        (1 << ADC_VBUS_CURRENT) |
+        (1 << ADC_INTERNAL_TEMP) |
+        (1 << ADC_APS_VOLTAGE));
+
     /* Change supply voltage from the default of 1250 mV to 1200 mV,
      * this matches the original firmware's settings. Didn't observe
      * any obviously bad behavior at 1250 mV, but better to be safe. */
@@ -120,6 +133,16 @@ int _battery_voltage(void)
      * reads ~20-30 mV higher so I suspect it's the "real" voltage. */
     return axp_adc_read(ADC_BATTERY_VOLTAGE);
 }
+
+#if CONFIG_BATTERY_MEASURE & CURRENT_MEASURE
+int _battery_current(void)
+{
+    if(charging_state())
+        return axp_adc_read(ADC_CHARGE_CURRENT);
+    else
+        return axp_adc_read(ADC_DISCHARGE_CURRENT);
+}
+#endif
 
 #if defined(HAVE_CW2015) && (CONFIG_BATTERY_MEASURE & PERCENTAGE_MEASURE) != 0
 int _battery_level(void)

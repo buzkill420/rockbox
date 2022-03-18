@@ -75,7 +75,7 @@ static unsigned char ep0_rx_buf[64];
 static struct usb_endpoint endpoints[] =
 {
     { .type = ep_control,   .fifo_addr = USB_FIFO_EP0, .fifo_size = 64 },
-    { .type = ep_control,   .fifo_addr = USB_FIFO_EP0, .buf = &ep0_rx_buf },
+    { .type = ep_control,   .fifo_addr = USB_FIFO_EP0, .buf = ep0_rx_buf },
     { .type = ep_bulk,      .fifo_addr = USB_FIFO_EP1, .fifo_size = 512 },
     { .type = ep_bulk,      .fifo_addr = USB_FIFO_EP1, .fifo_size = 512 },
     { .type = ep_interrupt, .fifo_addr = USB_FIFO_EP2, .fifo_size = 64 },
@@ -193,7 +193,7 @@ static void EP0_send(void)
     if(ep->sent >= ep->length)
     {
         REG_USB_REG_CSR0 = (csr0 | USB_CSR0_INPKTRDY | USB_CSR0_DATAEND); /* Set data end! */
-        usb_core_transfer_complete(0, USB_DIR_IN, 0, ep->sent);
+        usb_core_transfer_complete(EP_CONTROL, USB_DIR_IN, 0, ep->sent);
         ep_transfer_completed(ep);
     }
     else
@@ -239,7 +239,7 @@ static void EP0_handler(void)
     {
         readFIFO(ep_recv, REG_USB_REG_COUNT0);
         REG_USB_REG_CSR0 = csr0 | USB_CSR0_SVDOUTPKTRDY; /* clear OUTPKTRDY bit */
-        usb_core_control_request((struct usb_ctrlrequest*)ep_recv->buf);
+        usb_core_legacy_control_request((struct usb_ctrlrequest*)ep_recv->buf);
     }
 }
 
@@ -743,7 +743,7 @@ int usb_drv_send(int endpoint, void* ptr, int length)
     return 0;
 }
 
-int usb_drv_recv(int endpoint, void* ptr, int length)
+int usb_drv_recv_nonblocking(int endpoint, void* ptr, int length)
 {
     int flags;
     struct usb_endpoint *ep;

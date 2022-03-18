@@ -37,8 +37,7 @@
 #define ADC_CHARGE_CURRENT      7
 #define ADC_DISCHARGE_CURRENT   8
 #define ADC_APS_VOLTAGE         9
-#define ADC_BATTERY_POWER       10
-#define NUM_ADC_CHANNELS        11
+#define NUM_ADC_CHANNELS        10
 
 /* ADC sampling rates */
 #define AXP_ADC_RATE_25HZ   0
@@ -123,7 +122,6 @@ extern int axp_input_status(void);
 extern int axp_adc_read(int adc);
 extern int axp_adc_read_raw(int adc);
 extern int axp_adc_conv_raw(int adc, int value);
-extern int axp_adc_get_enabled(void);
 extern void axp_adc_set_enabled(int adc_bits);
 extern int axp_adc_get_rate(void);
 extern void axp_adc_set_rate(int rate);
@@ -139,7 +137,7 @@ extern void axp_cc_enable(bool en);
 extern bool axp_cc_is_enabled(void);
 
 /* Set/get maximum charging current in milliamps */
-extern void axp_set_charge_current(int maxcurrent);
+extern void axp_set_charge_current(int current_mA);
 extern int axp_get_charge_current(void);
 
 /* Set the shutdown bit */

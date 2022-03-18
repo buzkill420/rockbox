@@ -166,7 +166,7 @@ int usb_drv_send_nonblocking(int endpoint, void *ptr, int length)
     return 0;
 }
 
-int usb_drv_recv(int endpoint, void* ptr, int length)
+int usb_drv_recv_nonblocking(int endpoint, void* ptr, int length)
 {
     ep_transfer(EP_NUM(endpoint), ptr, length, true);
     return 0;
@@ -522,7 +522,7 @@ static void handle_ep_int(int ep, bool out)
                ep0_setup_pkt->bRequest     == USB_REQ_SET_ADDRESS)
                 DCFG = (DCFG & ~bitm(DCFG, devadr)) | (ep0_setup_pkt->wValue << DCFG_devadr_bitp);
 
-            usb_core_control_request(ep0_setup_pkt);
+            usb_core_legacy_control_request(ep0_setup_pkt);
         }
     }
 

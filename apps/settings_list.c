@@ -345,6 +345,18 @@ static const char graphic_numeric[] = "graphic,numeric";
 #endif
 #endif /* HAVE_BACKLIGHT */
 
+#if defined(HAVE_USB_CHARGING_ENABLE)
+# if !defined(TARGET_USB_CHARGING_DEFAULT)
+#  define TARGET_USB_CHARGING_DEFAULT USB_CHARGING_ENABLE
+# endif
+#endif
+
+#ifdef AUDIOHW_HAVE_POWER_MODE
+# ifndef TARGET_DEFAULT_DAC_POWER_MODE
+#   define TARGET_DEFAULT_DAC_POWER_MODE SOUND_HIGH_POWER
+# endif
+#endif
+
 #if LCD_DEPTH > 1
 static const char* list_pad_formatter(char *buffer, size_t buffer_size,
                                     int val, const char *unit)
@@ -871,7 +883,8 @@ const struct settings_list settings[] = {
 #endif
 
 #ifdef AUDIOHW_HAVE_POWER_MODE
-    CHOICE_SETTING(F_SOUNDSETTING, power_mode, LANG_DAC_POWER_MODE, 0,
+    CHOICE_SETTING(F_SOUNDSETTING, power_mode, LANG_DAC_POWER_MODE,
+                   TARGET_DEFAULT_DAC_POWER_MODE,
                    "dac_power_mode", "high,low", sound_set_power_mode,
                    2, ID2P(LANG_DAC_POWER_HIGH), ID2P(LANG_DAC_POWER_LOW)),
 #endif
@@ -914,6 +927,16 @@ const struct settings_list settings[] = {
       #error "HAVE_PLAY_FREQ < 48???"
 #endif
 #endif /* HAVE_PLAY_FREQ */
+
+#ifdef HAVE_ALBUMART
+    CHOICE_SETTING(0, album_art, LANG_ALBUM_ART, 1,
+                      "album art", "off,prefer embedded,prefer image file",
+                      NULL, 3,
+                      ID2P(LANG_OFF),
+                      ID2P(LANG_PREFER_EMBEDDED),
+                      ID2P(LANG_PREFER_IMAGE_FILE)),
+#endif
+
     /* LCD */
 #ifdef HAVE_LCD_CONTRAST
     /* its easier to leave this one un-macro()ed for the time being */
@@ -1030,13 +1053,7 @@ const struct settings_list settings[] = {
                   NULL, NULL, NULL),
 /* use this setting for user code even if there's no exchangable battery
  * support enabled */
-#if BATTERY_CAPACITY_DEFAULT > 0
-/* define min/max/inc for this file if there's only one battery */
-#ifndef BATTERY_CAPACITY_MIN
-#define BATTERY_CAPACITY_MIN BATTERY_CAPACITY_DEFAULT
-#define BATTERY_CAPACITY_MAX BATTERY_CAPACITY_DEFAULT
-#define BATTERY_CAPACITY_INC 0
-#endif
+#if BATTERY_CAPACITY_INC > 0
 #if defined(IPOD_VIDEO) && !defined(SIMULATOR)
     /* its easier to leave this one un-macro()ed for the time being */
     { F_T_INT|F_DEF_ISFUNC|F_INT_SETTING, &global_settings.battery_capacity,
@@ -1075,9 +1092,12 @@ const struct settings_list settings[] = {
 #endif
     /* tuner */
 #if CONFIG_TUNER
-    OFFON_SETTING(0,fm_force_mono, LANG_FM_MONO_MODE,
+    OFFON_SETTING(0, fm_force_mono, LANG_FM_MONO_MODE,
                   false, "force fm mono", toggle_mono_mode),
-                  SYSTEM_SETTING(NVRAM(4),last_frequency,0),
+    SYSTEM_SETTING(NVRAM(4), last_frequency, 0),
+#endif
+#if defined(HAVE_RDS_CAP) && defined(CONFIG_RTC)
+    OFFON_SETTING(0, sync_rds_time, LANG_FM_SYNC_RDS_TIME, false, "sync_rds_time", NULL),
 #endif
 
 #if BATTERY_TYPES_COUNT > 1
@@ -1214,6 +1234,17 @@ const struct settings_list settings[] = {
                 gui_list_screen_scroll_step),
     OFFON_SETTING(0,scroll_paginated,LANG_SCROLL_PAGINATED,
                   false,"scroll paginated",NULL),
+    OFFON_SETTING(0,list_wraparound,LANG_LIST_WRAPAROUND,
+                  true,"list wraparound",NULL),
+    CHOICE_SETTING(0, list_order, LANG_LIST_ORDER,
+#if defined(HAVE_SCROLLWHEEL) && !defined(FIIO_M3K)
+                   1,
+#else
+                   0,
+#endif
+                   /* values are defined by the enum in option_select.h */
+                   "list order", "descending,ascending",
+                   NULL, 2, ID2P(LANG_DESCENDING), ID2P(LANG_ASCENDING)),
 #ifdef HAVE_LCD_COLOR
 
     {F_T_INT|F_RGB|F_THEMESETTING ,&global_settings.fg_color,-1,
@@ -1232,6 +1263,18 @@ const struct settings_list settings[] = {
 #endif
     /* more playback */
     OFFON_SETTING(0,play_selected,LANG_PLAY_SELECTED,true,"play selected",NULL),
+    CHOICE_SETTING(0, single_mode, LANG_SINGLE_MODE, 0,
+                  "single mode",
+                  "off,track,album,album artist,artist,composer,work,genre",
+                  NULL, 8,
+                  ID2P(LANG_OFF),
+                  ID2P(LANG_TRACK),
+                  ID2P(LANG_ID3_ALBUM),
+                  ID2P(LANG_ID3_ALBUMARTIST),
+                  ID2P(LANG_ID3_ARTIST),
+                  ID2P(LANG_ID3_COMPOSER),
+                  ID2P(LANG_ID3_GROUPING),
+                  ID2P(LANG_ID3_GENRE)),
     OFFON_SETTING(0,party_mode,LANG_PARTY_MODE,false,"party mode",NULL),
     OFFON_SETTING(0,fade_on_stop,LANG_FADE_ON_STOP,true,"volume fade",NULL),
     INT_SETTING(F_TIME_SETTING, ff_rewind_min_step, LANG_FFRW_STEP, 1,
@@ -1827,7 +1870,7 @@ const struct settings_list settings[] = {
 #endif
     TEXT_SETTING(0,kbd_file,"kbd","-",ROCKBOX_DIR "/",".kbd"),
 #ifdef HAVE_USB_CHARGING_ENABLE
-    CHOICE_SETTING(0, usb_charging, LANG_USB_CHARGING, 1, "usb charging",
+    CHOICE_SETTING(0, usb_charging, LANG_USB_CHARGING, TARGET_USB_CHARGING_DEFAULT, "usb charging",
                    "off,on,force", NULL, 3, ID2P(LANG_SET_BOOL_NO),
                    ID2P(LANG_SET_BOOL_YES), ID2P(LANG_FORCE)),
 #endif
@@ -1953,6 +1996,10 @@ const struct settings_list settings[] = {
                   "sleeptimer on startup", NULL),
     OFFON_SETTING(0, keypress_restarts_sleeptimer, LANG_KEYPRESS_RESTARTS_SLEEP_TIMER, false,
                   "keypress restarts sleeptimer", set_keypress_restarts_sleep_timer),
+
+    OFFON_SETTING(0, show_shutdown_message, LANG_SHOW_SHUTDOWN_MESSAGE, true,
+                  "show shutdown message", NULL),
+
 #ifdef HAVE_TOUCHPAD_SENSITIVITY_SETTING
 /* If specific values are set for touchpad sensitivity setting we use those */
 #if (defined(MAX_TOUCHPAD_SENSITIVITY_SETTING) \

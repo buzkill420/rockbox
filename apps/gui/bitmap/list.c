@@ -90,11 +90,57 @@ static int list_icon_width(enum screen_type screen)
     return get_icon_width(screen) + ICON_PADDING * 2;
 }
 
-static bool draw_title(struct screen *display, struct gui_synclist *list)
+static void _default_listdraw_fn(struct list_putlineinfo_t *list_info)
+{
+    struct screen *display = list_info->display; 
+    int x = list_info->x;
+    int y = list_info->y;
+    int item_indent = list_info->item_indent;
+    int item_offset = list_info->item_offset;
+    int icon = list_info->icon;
+    bool is_selected = list_info->is_selected;
+    bool is_title = list_info->is_title;
+    bool show_cursor = list_info->show_cursor;
+    bool have_icons = list_info->have_icons;
+    struct line_desc *linedes = list_info->linedes;
+    char *dsp_text = list_info->dsp_text;
+
+    if (is_title)
+    {
+        if (have_icons)
+            display->put_line(x, y, linedes, "$"ICON_PADDING_S"I$t",
+                    icon, dsp_text);
+        else
+            display->put_line(x, y, linedes, "$t", dsp_text);
+    }
+    else if (show_cursor && have_icons)
+    {
+    /* the list can have both, one of or neither of cursor and item icons,
+     * if both don't apply icon padding twice between the icons */
+        display->put_line(x, y, 
+                linedes, "$*s$"ICON_PADDING_S"I$i$"ICON_PADDING_S"s$*t",
+                item_indent, is_selected ? Icon_Cursor : Icon_NOICON,
+                icon, item_offset, dsp_text);
+    }
+    else if (show_cursor || have_icons)
+    {
+        display->put_line(x, y, linedes, "$*s$"ICON_PADDING_S"I$*t", item_indent,
+                show_cursor ? (is_selected ? Icon_Cursor:Icon_NOICON):icon,
+                item_offset, dsp_text);
+    }
+    else
+    {
+        display->put_line(x, y, linedes, "$*s$*t", item_indent, item_offset, dsp_text);
+    }
+}
+
+static bool draw_title(struct screen *display,
+                       struct gui_synclist *list,
+                       list_draw_item *callback_draw_item)
 {
     const int screen = display->screen_type;
     struct viewport *title_text_vp = &title_text[screen];
-    struct line_desc line = LINE_DESC_DEFINIT;
+    struct line_desc linedes = LINE_DESC_DEFINIT;
 
     if (sb_set_title_text(list->title, list->title_icon, screen))
         return false; /* the sbs is handling the title */
@@ -102,29 +148,39 @@ static bool draw_title(struct screen *display, struct gui_synclist *list)
     if (!list_display_title(list, screen))
         return false;
     *title_text_vp = *(list->parent[screen]);
-    line.height = list->line_height[screen];
-    title_text_vp->height = line.height;
+    linedes.height = list->line_height[screen];
+    title_text_vp->height = linedes.height;
 
 #if LCD_DEPTH > 1
     /* XXX: Do we want to support the separator on remote displays? */
     if (display->screen_type == SCREEN_MAIN && global_settings.list_separator_height != 0)
-        line.separator_height = abs(global_settings.list_separator_height)
+        linedes.separator_height = abs(global_settings.list_separator_height)
                                 + (lcd_get_dpi() > 200 ? 2 : 1);
 #endif
 
 #ifdef HAVE_LCD_COLOR
     if (list->title_color >= 0)
-        line.style |= (STYLE_COLORED|list->title_color);
+        linedes.style |= (STYLE_COLORED|list->title_color);
 #endif
-    line.scroll = true;
+    linedes.scroll = true;
 
     display->set_viewport(title_text_vp);
+    int icon = list->title_icon;
+    int icon_w = list_icon_width(display->screen_type);
+    bool have_icons = false;
+    if (icon != Icon_NOICON && global_settings.show_icons)
+        have_icons = true;
 
-    if (list->title_icon != Icon_NOICON && global_settings.show_icons)
-        put_line(display, 0, 0, &line, "$"ICON_PADDING_S"I$t",
-                 list->title_icon, list->title);
-    else
-        put_line(display, 0, 0, &line, "$t", list->title);
+    struct list_putlineinfo_t list_info =
+    {
+        .x = 0, .y = 0, .item_indent = 0, .item_offset = 0,
+         .line = -1, .icon = icon, .icon_width = icon_w,
+        .display = display, .vp = title_text_vp, .linedes = &linedes, .list = list,
+        .dsp_text = list->title,
+        .is_selected = false, .is_title = true, .show_cursor = false,
+        .have_icons = have_icons
+    };
+    callback_draw_item(&list_info);
 
     return true;
 }
@@ -133,6 +189,8 @@ void list_draw(struct screen *display, struct gui_synclist *list)
 {
     int start, end, item_offset, i;
     const int screen = display->screen_type;
+    list_draw_item *callback_draw_item;
+
     const int list_start_item = list->start_item[screen];
     const bool scrollbar_in_left = (global_settings.scrollbar == SCROLLBAR_LEFT);
     const bool scrollbar_in_right = (global_settings.scrollbar == SCROLLBAR_RIGHT);
@@ -145,11 +203,16 @@ void list_draw(struct screen *display, struct gui_synclist *list)
     struct viewport *list_text_vp = &list_text[screen];
     int indent = 0;
 
+    if (list->callback_draw_item != NULL)
+        callback_draw_item = list->callback_draw_item;
+    else
+        callback_draw_item = _default_listdraw_fn;
+
     struct viewport * last_vp = display->set_viewport(parent);
     display->clear_viewport();
     display->scroll_stop_viewport(list_text_vp);
     *list_text_vp = *parent;
-    if ((show_title = draw_title(display, list)))
+    if ((show_title = draw_title(display, list, callback_draw_item)))
     {
         int title_height = title_text[screen].height;
         list_text_vp->y += title_height;
@@ -169,6 +232,12 @@ void list_draw(struct screen *display, struct gui_synclist *list)
     end = start + nb_lines;
 
 #ifdef HAVE_TOUCHSCREEN
+    /* y_pos needs to be clamped now since it can overflow the maximum
+     * in some cases, and we have no easy way to prevent this beforehand */
+    int max_y_pos = list->nb_items * linedes.height - list_text[screen].height;
+    if (max_y_pos > 0 && list->y_pos > max_y_pos)
+        list->y_pos = max_y_pos;
+
     int draw_offset = list_start_item * linedes.height - list->y_pos;
     /* draw some extra items to not have empty lines at the top and bottom */
     if (draw_offset > 0)
@@ -179,8 +248,17 @@ void list_draw(struct screen *display, struct gui_synclist *list)
         if (start > 0)
             start--;
     }
-    else if (draw_offset < 0)
-        end++;
+    else if (draw_offset < 0) {
+        if(end < list->nb_items)
+            end++;
+    }
+
+    /* If the viewport is not an exact multiple of the line height, then
+     * there will be space for one more partial line. */
+    int spare_space = list_text_vp->height - linedes.height * nb_lines;
+    if(nb_lines < list->nb_items && spare_space > 0 && end < list->nb_items)
+        if(end < list->nb_items)
+            end++;
 #else
     #define draw_offset 0
 #endif
@@ -193,17 +271,32 @@ void list_draw(struct screen *display, struct gui_synclist *list)
         {
             struct viewport vp = *list_text_vp;
             vp.width = SCROLLBAR_WIDTH;
+#ifndef HAVE_TOUCHSCREEN
+            /* touchscreens must use full viewport height
+             * due to pixelwise rendering */
             vp.height = linedes.height * nb_lines;
+#endif
             list_text_vp->width -= SCROLLBAR_WIDTH;
             if (scrollbar_in_right)
                 vp.x += list_text_vp->width;
             else /* left */
                 list_text_vp->x += SCROLLBAR_WIDTH;
             struct viewport *last = display->set_viewport(&vp);
+
+#ifndef HAVE_TOUCHSCREEN
+            /* button targets go itemwise */
+            int scrollbar_items = list->nb_items;
+            int scrollbar_min = list_start_item;
+            int scrollbar_max = list_start_item + nb_lines;
+#else
+            /* touchscreens use pixelwise scrolling */
+            int scrollbar_items = list->nb_items * linedes.height;
+            int scrollbar_min = list->y_pos;
+            int scrollbar_max = list->y_pos + list_text_vp->height;
+#endif
             gui_scrollbar_draw(display,
                     (scrollbar_in_left? 0: 1), 0, SCROLLBAR_WIDTH-1, vp.height,
-                    list->nb_items, list_start_item, list_start_item + nb_lines,
-                    VERTICAL);
+                    scrollbar_items, scrollbar_min, scrollbar_max, VERTICAL);
             display->set_viewport(last);
         }
         /* shift everything a bit in relation to the title */
@@ -214,6 +307,16 @@ void list_draw(struct screen *display, struct gui_synclist *list)
     }
 
     display->set_viewport(list_text_vp);
+    int icon_w = list_icon_width(screen);
+    int character_width = display->getcharwidth();
+
+    struct list_putlineinfo_t list_info =
+    {
+        .x = 0, .y = 0, .vp = list_text_vp, .list = list,
+        .icon_width = icon_w, .is_title = false, .show_cursor = show_cursor,
+        .have_icons = have_icons, .linedes = &linedes, .display = display
+    };
+
     for (i=start; i<end && i<list->nb_items; i++)
     {
         /* do the text */
@@ -221,7 +324,7 @@ void list_draw(struct screen *display, struct gui_synclist *list)
         unsigned const char *s;
         char entry_buffer[MAX_PATH];
         unsigned char *entry_name;
-        int text_pos = 0;
+        const int text_pos = 0; /* UNUSED */
         int line = i - start;
         int line_indent = 0;
         int style = STYLE_DEFAULT;
@@ -238,9 +341,9 @@ void list_draw(struct screen *display, struct gui_synclist *list)
         if (line_indent)
         {
             if (global_settings.show_icons)
-                line_indent *= list_icon_width(screen);
+                line_indent *= icon_w;
             else
-                line_indent *= display->getcharwidth();
+                line_indent *= character_width;
         }
         line_indent += indent;
 
@@ -315,27 +418,22 @@ void list_draw(struct screen *display, struct gui_synclist *list)
             }
         }
 #endif
-
         linedes.style = style;
         linedes.scroll = is_selected ? true : list->scroll_all;
         linedes.line = i % list->selected_size;
         icon = list->callback_get_item_icon ?
                     list->callback_get_item_icon(i, list->data) : Icon_NOICON;
-        /* the list can have both, one of or neither of cursor and item icons,
-         * if both don't apply icon padding twice between the icons */
-        if (show_cursor && have_icons)
-            put_line(display, 0, line * linedes.height + draw_offset,
-                    &linedes, "$*s$"ICON_PADDING_S"I$i$"ICON_PADDING_S"s$*t",
-                    line_indent, is_selected ? Icon_Cursor : Icon_NOICON,
-                    icon, item_offset, entry_name);
-        else if (show_cursor || have_icons)
-            put_line(display, 0, line * linedes.height + draw_offset,
-                    &linedes, "$*s$"ICON_PADDING_S"I$*t", line_indent,
-                    show_cursor ? (is_selected ? Icon_Cursor:Icon_NOICON):icon,
-                    item_offset, entry_name);
-        else
-            put_line(display, 0, line * linedes.height + draw_offset,
-                    &linedes, "$*s$*t", line_indent, item_offset, entry_name);
+
+
+        list_info.y = line * linedes.height + draw_offset;
+        list_info.is_selected = is_selected;
+        list_info.item_indent = line_indent;
+        list_info.line = i;
+        list_info.icon = icon;
+        list_info.dsp_text = entry_name;
+        list_info.item_offset = item_offset;
+
+        callback_draw_item(&list_info);
     }
     display->set_viewport(parent);
     display->update_viewport();
@@ -360,21 +458,28 @@ static int scrollbar_scroll(struct gui_synclist * gui_list, int y)
     const int screen = screens[SCREEN_MAIN].screen_type;
     const int nb_lines = list_get_nb_lines(gui_list, screen);
 
-    if (nb_lines <  gui_list->nb_items)
+    if (nb_lines < gui_list->nb_items)
     {
-        /* scrollbar scrolling is still line based */
-        int scrollbar_size = nb_lines * gui_list->line_height[screen];
+        const int line_height = gui_list->line_height[screen];
+
+        /* try to position the center of the scrollbar at the touch point */
+        int scrollbar_size = list_text[screen].height;
         int actual_y = y - list_text[screen].y;
-        int new_selection = (actual_y * gui_list->nb_items) / scrollbar_size;
+        int new_y_pos = (actual_y * gui_list->nb_items * line_height) / scrollbar_size;
+        int new_start = (actual_y * gui_list->nb_items) / scrollbar_size;
 
-        int start_item = new_selection - nb_lines/2;
-        if(start_item < 0)
-            start_item = 0;
-        else if(start_item > gui_list->nb_items - nb_lines)
-            start_item = gui_list->nb_items - nb_lines;
+        new_start -= nb_lines / 2;
+        new_y_pos -= (nb_lines * line_height) / 2;
+        if(new_start < 0) {
+            new_start = 0;
+            new_y_pos = 0;
+        } else if(new_start > gui_list->nb_items - nb_lines) {
+            new_start = gui_list->nb_items - nb_lines;
+            new_y_pos = new_start * line_height;
+        }
 
-        gui_list->start_item[screen] = start_item;
-        gui_list->y_pos = start_item * gui_list->line_height[screen];
+        gui_list->start_item[screen] = new_start;
+        gui_list->y_pos = new_y_pos;
 
         return ACTION_REDRAW;
     }
@@ -509,6 +614,7 @@ static bool swipe_scroll(struct gui_synclist * gui_list, int difference)
     const int old_start = gui_list->start_item[screen];
     int new_start_item = -1;
     int line_diff = 0;
+    int max_y_pos = gui_list->nb_items * line_height - list_text[screen].height;
 
     /* Track whether we hit the end of the list for sake of kinetic scroll */
     bool hit_end = true;
@@ -517,8 +623,8 @@ static bool swipe_scroll(struct gui_synclist * gui_list, int difference)
     gui_list->y_pos -= difference;
     if(gui_list->y_pos < 0)
         gui_list->y_pos = 0;
-    else if(gui_list->y_pos > (gui_list->nb_items - nb_lines) * line_height)
-        gui_list->y_pos = (gui_list->nb_items - nb_lines) * line_height;
+    else if(gui_list->y_pos > max_y_pos)
+        gui_list->y_pos = max_y_pos;
     else
         hit_end = false;
 

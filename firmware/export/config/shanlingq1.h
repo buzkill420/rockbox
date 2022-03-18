@@ -59,6 +59,7 @@
 #define HAVE_TOUCHSCREEN
 #define HAVE_BUTTON_DATA
 #define HAVE_FT6x06
+#define FT6x06_NUM_POINTS 5
 #define HAVE_HEADPHONE_DETECTION
 
 /* Storage defines */
@@ -75,7 +76,7 @@
 /* TODO: implement HAVE_RTC_ALARM */
 
 /* Power management */
-#define CONFIG_BATTERY_MEASURE (VOLTAGE_MEASURE)
+#define CONFIG_BATTERY_MEASURE (VOLTAGE_MEASURE|CURRENT_MEASURE)
 #define CONFIG_CHARGING        CHARGING_MONITOR
 #define HAVE_SW_POWEROFF
 
@@ -96,7 +97,6 @@
 /* USB support */
 #ifndef SIMULATOR
 #define CONFIG_USBOTG USBOTG_DESIGNWARE
-#define USB_DW_ARCH_SLAVE
 #define USB_DW_TURNAROUND 5
 #define HAVE_USBSTACK
 #define USB_VENDOR_ID 0x0525  /* Same as the xDuuo X3, for some reason. */
@@ -104,7 +104,18 @@
 #define USB_DEVBSS_ATTR __attribute__((aligned(32)))
 #define HAVE_USB_POWER
 #define HAVE_USB_CHARGING_ENABLE
+#define HAVE_USB_CHARGING_IN_THREAD
+#define TARGET_USB_CHARGING_DEFAULT USB_CHARGING_FORCE
 #define HAVE_BOOTLOADER_USB_MODE
+/* This appears to improve transfer performance (the default is 64 KiB).
+ * Going any higher doesn't help but we're still slower than the OF. */
+#define USB_READ_BUFFER_SIZE    (128 * 1024)
+#define USB_WRITE_BUFFER_SIZE   (128 * 1024)
+#endif
+
+#ifdef BOOTLOADER
+/* Ignore on any key can cause surprising USB issues in the bootloader */
+# define USBPOWER_BTN_IGNORE (~(BUTTON_PREV|BUTTON_NEXT))
 #endif
 
 /* Rockbox capabilities */

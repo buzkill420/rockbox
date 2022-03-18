@@ -58,7 +58,8 @@
 
 #define str_or_empty(x) (x ? x : "(NULL)")
 
-#define FILE_SEARCH_INSTRUCTIONS ROCKBOX_DIR "/tagnavi.config"
+#define TAGNAVI_DEFAULT_CONFIG  ROCKBOX_DIR "/tagnavi.config"
+#define TAGNAVI_USER_CONFIG     ROCKBOX_DIR "/tagnavi_user.config"
 
 static int tagtree_play_folder(struct tree_context* c);
 
@@ -110,7 +111,7 @@ enum variables {
 
 /* Capacity 10 000 entries (for example 10k different artists) */
 #define UNIQBUF_SIZE (64*1024)
-static long uniqbuf[UNIQBUF_SIZE / sizeof(long)];
+static uint32_t uniqbuf[UNIQBUF_SIZE / sizeof(uint32_t)];
 
 #define MAX_TAGS 5
 #define MAX_MENU_ID_SIZE 32
@@ -338,6 +339,7 @@ static int get_tag(int *tag)
         {"filename", tag_filename},
         {"basename", tag_virt_basename},
         {"tracknum", tag_tracknumber},
+        {"canonicalartist", tag_virt_canonicalartist},
         {"discnum", tag_discnumber},
         {"year", tag_year},
         {"playcount", tag_playcount},
@@ -396,26 +398,28 @@ static int get_tag(int *tag)
 
 static int get_clause(int *condition)
 {
-    static const struct match get_clause_match[] =
-    {
-        {"=", clause_is},
-        {"==", clause_is},
-        {"!=", clause_is_not},
-        {">", clause_gt},
-        {">=", clause_gteq},
-        {"<", clause_lt},
-        {"<=", clause_lteq},
-        {"~", clause_contains},
-        {"!~", clause_not_contains},
-        {"^", clause_begins_with},
-        {"!^", clause_not_begins_with},
-        {"$", clause_ends_with},
-        {"!$", clause_not_ends_with},
-        {"@", clause_oneof}
-    };
+    /* one or two operator conditionals */ 
+    #define OPS2VAL(op1, op2) ((int)op1 << 8 | (int)op2)
+    #define CLAUSE(op1, op2, symbol) {OPS2VAL(op1, op2), symbol }
 
-    char buf[4];
-    unsigned int i;
+    struct clause_symbol {int value;int symbol;};
+    static const struct clause_symbol get_clause_match[] =
+    {
+        CLAUSE('=', ' ', clause_is),
+        CLAUSE('=', '=', clause_is),
+        CLAUSE('!', '=', clause_is_not),
+        CLAUSE('>', ' ', clause_gt),
+        CLAUSE('>', '=', clause_gteq),
+        CLAUSE('<', ' ', clause_lt),
+        CLAUSE('<', '=', clause_lteq),
+        CLAUSE('~', ' ', clause_contains),
+        CLAUSE('!', '~', clause_not_contains),
+        CLAUSE('^', ' ', clause_begins_with),
+        CLAUSE('!', '^', clause_not_begins_with),
+        CLAUSE('$', ' ', clause_ends_with),
+        CLAUSE('!', '$', clause_not_ends_with),
+        CLAUSE('@', ' ', clause_oneof)
+    };
 
     /* Find the start. */
     while (*strp == ' ' && *strp != '\0')
@@ -424,18 +428,16 @@ static int get_clause(int *condition)
     if (*strp == '\0')
         return 0;
 
-    for (i = 0; i < sizeof(buf)-1; i++)
-    {
-        if (*strp == '\0' || *strp == ' ')
-            break ;
-        buf[i] = *strp;
-        strp++;
-    }
-    buf[i] = '\0';
+    char op1 = strp[0];
+    char op2 = strp[1];
+    if (op2 == '"') /*allow " to end a single op conditional */
+        op2 = ' ';
 
-    for (i = 0; i < ARRAYLEN(get_clause_match); i++)
+    int value = OPS2VAL(op1, op2);
+
+    for (unsigned int i = 0; i < ARRAYLEN(get_clause_match); i++)
     {
-        if (!strcasecmp(buf, get_clause_match[i].str))
+        if (value == get_clause_match[i].value)
         {
             *condition = get_clause_match[i].symbol;
             return 1;
@@ -443,6 +445,8 @@ static int get_clause(int *condition)
     }
 
     return 0;
+#undef OPS2VAL
+#undef CLAUSE
 }
 
 static bool read_clause(struct tagcache_search_clause *clause)
@@ -1261,7 +1265,14 @@ void tagtree_init(void)
     if (tagtree_handle < 0)
         panicf("tagtree OOM");
 
-    if (!parse_menu(FILE_SEARCH_INSTRUCTIONS))
+    /* Use the user tagnavi config if present, otherwise use the default. */
+    const char* tagnavi_file;
+    if(file_exists(TAGNAVI_USER_CONFIG))
+        tagnavi_file = TAGNAVI_USER_CONFIG;
+    else
+        tagnavi_file = TAGNAVI_DEFAULT_CONFIG;
+
+    if (!parse_menu(tagnavi_file))
     {
         tagtree_unload(NULL);
         return;
@@ -1575,6 +1586,19 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
 
         if (strcmp(tcs.result, UNTAGGED) == 0)
         {
+            if (tag == tag_title) /* Fallback to filename */
+            {
+                char *lastname = dptr->name;
+                dptr->name = core_get_data(c->cache.name_buffer_handle)+namebufused;
+                if (tagcache_retrieve(&tcs, tcs.idx_id, tag_filename, dptr->name,
+                                      c->cache.name_buffer_size - namebufused))
+                {
+                    namebufused += strlen(dptr->name)+1;
+                    goto entry_skip_formatter;
+                }
+                dptr->name = lastname; /* restore last entry if filename failed */
+            }
+
             tcs.result = str(LANG_TAGNAVI_UNTAGGED);
             tcs.result_len = strlen(tcs.result);
             tcs.ramresult = true;
@@ -1623,6 +1647,7 @@ static int retrieve_entries(struct tree_context *c, int offset, bool init)
         else
             dptr->name = tcs.result;
 
+entry_skip_formatter:
         dptr++;
         current_entry_count++;
 
@@ -1837,6 +1862,8 @@ int tagtree_enter(struct tree_context* c)
     tree_lock_cache(c);
     tagtree_lock();
 
+    bool reset_selection = true;
+
     switch (c->currtable) {
         case ROOT:
             c->currextra = newextra;
@@ -1922,6 +1949,8 @@ int tagtree_enter(struct tree_context* c)
         case ALLSUBENTRIES:
             if (newextra == PLAYTRACK)
             {
+                reset_selection = false;
+
                 if (global_settings.party_mode && audio_status()) {
                     splash(HZ, ID2P(LANG_PARTY_MODE));
                     break;
@@ -1953,9 +1982,12 @@ int tagtree_enter(struct tree_context* c)
             break;
     }
 
+    if (reset_selection)
+    {
+        c->selected_item=0;
+        gui_synclist_select_item(&tree_lists, c->selected_item);
+    }
 
-    c->selected_item=0;
-    gui_synclist_select_item(&tree_lists, c->selected_item);
     tree_unlock_cache(c);
     tagtree_unlock();
 

@@ -150,6 +150,7 @@ void gui_synclist_init(struct gui_synclist * gui_list,
     gui_list->callback_get_item_icon = NULL;
     gui_list->callback_get_item_name = callback_get_item_name;
     gui_list->callback_speak_item = NULL;
+    gui_list->callback_draw_item = NULL;
     gui_list->nb_items = 0;
     gui_list->selected_item = 0;
 #ifdef HAVE_TOUCHSCREEN
@@ -686,7 +687,7 @@ bool gui_synclist_do_button(struct gui_synclist * lists,
     switch (wrap)
     {
         case LIST_WRAP_ON:
-            gui_synclist_limit_scroll(lists, false);
+            gui_synclist_limit_scroll(lists, !global_settings.list_wraparound);
         break;
         case LIST_WRAP_OFF:
             gui_synclist_limit_scroll(lists, true);
@@ -697,7 +698,7 @@ bool gui_synclist_do_button(struct gui_synclist * lists,
                 action == ACTION_LISTTREE_PGUP  ||
                 action == ACTION_LISTTREE_PGDOWN)
                 gui_synclist_limit_scroll(lists, true);
-            else gui_synclist_limit_scroll(lists, false);
+            else gui_synclist_limit_scroll(lists, !global_settings.list_wraparound);
         break;
     };
 
@@ -754,7 +755,7 @@ bool gui_synclist_do_button(struct gui_synclist * lists,
             if (lists->offset_position[0] == 0)
             {
                 pgleft_allow_cancel = true;
-                *actionptr = ACTION_STD_CANCEL;
+                *actionptr = ACTION_STD_MENU;
                 return true;
             }
             *actionptr = ACTION_TREE_PGLEFT;
@@ -911,7 +912,7 @@ bool simplelist_show_list(struct simplelist_info *info)
     struct gui_synclist lists;
     int action, old_line_count = simplelist_line_count;
     list_get_name *getname;
-    int wrap = LIST_WRAP_UNLESS_HELD;
+    int wrap = global_settings.list_wraparound ? LIST_WRAP_UNLESS_HELD : LIST_WRAP_OFF;
     if (info->get_name)
         getname = info->get_name;
     else

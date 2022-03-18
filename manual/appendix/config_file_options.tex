@@ -37,12 +37,18 @@
     repeat          & off, all, one, shuffle, ab
                                         & N/A\\
     play selected   & on, off           & N/A\\
+    single mode     & off, track, album, album artist, artist, composer, work, genre
+                    & N/A\\
     party mode      & on, off           & N/A\\
     scan min step   & 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 45, 60
                                         & s\\
     seek acceleration & very fast, fast, normal, slow, very slow & N/A\\
     antiskip        & 5s, 15s, 30s, 1min, 2min, 3min, 5min, 10min & N/A\\
     volume fade     & on, off           & N/A\\
+    root menu order & - (i.e. a hyphen to reset to default) or a
+                    comma-separated list of (a subset of) the following words,
+                    with no spaces around the commas: bookmarks, files, database, wps,
+                    settings, playlists, plugins, system\_menu, shortcuts & N/A\\
     sort case       & on, off           & N/A\\
     show files      & all, supported, music, playlists & N/A\\
     show filename exts & off, on, unknown, view\_all & N/A\\
@@ -63,6 +69,8 @@
     Screen Scrolls Out Of View & on, off & N/A\\
     bidir limit     & 0 to 200          & \% screen\\
     scroll paginated & on, off & N/A\\
+    list wraparound & on, off & N/A\\
+    list order      & ascending, descending & N/A\\
     hold\_lr\_for\_scroll\_in\_list & on, off & N/A\\
     show path in browser & off, current directory, full path & N/A\\
     contrast        & 0 to 63           & N/A\\
@@ -105,6 +113,7 @@
 
     idle poweroff   & off, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30, 45, 60
                                         & min\\
+    show shutdown message & off, on     & N/A\\
     sleeptimer duration   & 5 to 300 (in steps of 5)
                                         & min\\
     sleeptimer on startup & off, on     & N/A\\
@@ -123,6 +132,10 @@
     rewind duration on pause & 0 to 15  & s\\
     disable autoresume if phones not present & off, on & N/A\\
     Last.fm Logging & off, on           & N/A\\
+    \opt{albumart}{
+    album art
+                    & off, prefer embedded, prefer image file & N/A\\
+    }
     talk dir        & off, number, spell& N/A\\
     talk dir clip   & off, on           & N/A\\
     talk file       & off, number, spell& N/A\\
@@ -316,7 +329,7 @@
       remote scroll step
                 & 1 to 160              & N/A\\
       remote scroll delay
-                & 0 to 2500             & ms\\ 
+                & 0 to 2500             & ms\\
       remote bidir limit
                 & 0 to 200              & N/A\\
       backlight filters first remote keypress
@@ -355,6 +368,10 @@
     }%
     \opt{radio}{
       force fm mono
+                & off, on               & N/A\\
+    }%
+    \opt{rds}{
+      sync RDS time
                 & off, on               & N/A\\
     }%
 

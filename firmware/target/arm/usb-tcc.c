@@ -251,7 +251,7 @@ void handle_control(void)
         DEBUG(2, "req: %02x %02d", req->bRequestType, req->bRequest);
     }
 
-    usb_core_control_request(req);
+    usb_core_legacy_control_request(req);
 }
 
 static
@@ -609,7 +609,7 @@ int usb_drv_send_nonblocking(int endpoint, void *ptr, int length)
     return rc;
 }
 
-int usb_drv_recv(int endpoint, void* ptr, int length)
+int usb_drv_recv_nonblocking(int endpoint, void* ptr, int length)
 {
     volatile struct tcc_ep *tcc_ep = &tcc_endpoints[endpoint & 0x7f];
     int flags;

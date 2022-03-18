@@ -128,12 +128,18 @@
 
 #if defined(HAVE_BOOTDATA) && !defined(SIMULATOR)
 #include "bootdata.h"
+#include "multiboot.h"
+#include "rbpaths.h"
+#include "pathfuncs.h"
+#include "rb-loader.h"
 #endif
+
+#define SCREEN_MAX_CHARS (LCD_WIDTH / SYSFONT_WIDTH)
 
 static const char* threads_getname(int selected_item, void *data,
                                    char *buffer, size_t buffer_len)
 {
-    (void)data;
+    int *x_offset = (int*) data;
 
 #if NUM_CORES > 1
     if (selected_item < (int)NUM_CORES)
@@ -153,36 +159,70 @@ static const char* threads_getname(int selected_item, void *data,
     struct thread_debug_info threadinfo;
     if (thread_get_debug_info(selected_item, &threadinfo) > 0)
     {
-        fmtstr = "%2d:" IF_COP(" (%d)") " %s" IF_PRIO(" %d %d")
+        fmtstr = "%2d:" IF_COP(" (%d)") " %s%n" IF_PRIO(" %d %d")
                  IFN_SDL(" %2d%%") " %s";
     }
-
-    snprintf(buffer, buffer_len, fmtstr,
+    int status_len;
+    size_t len = snprintf(buffer, buffer_len, fmtstr,
              selected_item,
              IF_COP(threadinfo.core,)
              threadinfo.statusstr,
+             &status_len,
              IF_PRIO(threadinfo.base_priority, threadinfo.current_priority,)
              IFN_SDL(threadinfo.stack_usage,)
              threadinfo.name);
 
-    return buffer;
+    int start = 0;
+    if (len >= SCREEN_MAX_CHARS)
+    {
+        int ch_offset = (*x_offset)%(len-1);
+        int rem = SCREEN_MAX_CHARS - (len - ch_offset);
+        if (rem > 0)
+            ch_offset -= rem;
+
+        if (ch_offset > 0)
+        {
+            /* don't scroll the # and status */
+            status_len++;
+            if ((unsigned int)ch_offset + status_len < buffer_len)
+                memmove(&buffer[ch_offset], &buffer[0], status_len);
+            start = ch_offset;
+        }
+    }
+    return &buffer[start];
 }
 
 static int dbg_threads_action_callback(int action, struct gui_synclist *lists)
 {
-    (void)lists;
+
     if (action == ACTION_NONE)
+    {
+        return ACTION_REDRAW;
+    }
+
+    int *x_offset = ((int*) lists->data);
+    if (action == ACTION_STD_OK)
+    {
+        *x_offset += 1;
         action = ACTION_REDRAW;
+    }
+    else if (action != ACTION_UNKNOWN)
+    {
+        *x_offset = 0;
+    }
+
     return action;
 }
 /* Test code!!! */
 static bool dbg_os(void)
 {
     struct simplelist_info info;
+    int xoffset = 0;
+
     simplelist_info_init(&info, IF_COP("Core and ") "Stack usage:",
-                         MAXTHREADS IF_COP( + NUM_CORES ), NULL);
+                         MAXTHREADS IF_COP( + NUM_CORES ), &xoffset);
     info.hide_selection = true;
-    info.scroll_all = true;
+    info.scroll_all = false;
     info.action_callback = dbg_threads_action_callback;
     info.get_name = threads_getname;
     return simplelist_show_list(&info);
@@ -1146,6 +1186,10 @@ static bool view_battery(void)
                     lcd_putsf(0, 7, "Est. remain: %d m", time_left);
                 else
                     lcd_puts(0, 7, "Estimation n/a");
+
+#if (CONFIG_BATTERY_MEASURE & CURRENT_MEASURE)
+                lcd_putsf(0, 8, "battery current: %d mA", battery_current());
+#endif
                 break;
         }
 
@@ -2097,7 +2141,7 @@ static int radio_callback(int btn, struct gui_synclist *lists)
 
         struct tm* time = gmtime(&seconds);
         simplelist_addline(
-            "CT:%4d-%02d-%02d %02d:%02d",
+            "CT:%4d-%02d-%02d %02d:%02d:%02d",
             time->tm_year + 1900, time->tm_mon + 1, time->tm_mday,
             time->tm_hour, time->tm_min, time->tm_sec);
     }
@@ -2240,6 +2284,51 @@ static bool cpu_boost_log(void)
     lcd_scroll_stop();
     get_action(CONTEXT_STD,TIMEOUT_BLOCK);
     lcd_setfont(FONT_UI);
+    return false;
+}
+
+static bool cpu_boost_log_dump(void)
+{
+    int fd;
+#if CONFIG_RTC
+    struct tm *nowtm;
+    char fname[MAX_PATH];
+#endif
+
+    int count = cpu_boost_log_getcount();
+    char *str = cpu_boost_log_getlog_first();
+
+    splashf(HZ, "Boost Log File Dumped");
+
+    /* nothing to print ? */
+    if(count == 0)
+        return false;
+
+#if CONFIG_RTC
+    nowtm = get_time();
+    snprintf(fname, MAX_PATH, "%s/boostlog_%04d%02d%02d%02d%02d%02d.txt", ROCKBOX_DIR,
+             nowtm->tm_year + 1900, nowtm->tm_mon + 1, nowtm->tm_mday,
+             nowtm->tm_hour, nowtm->tm_min, nowtm->tm_sec);
+    fd = open(fname, O_CREAT|O_WRONLY|O_TRUNC);
+#else
+    fd = open(ROCKBOX_DIR "/boostlog.txt", O_CREAT|O_WRONLY|O_TRUNC, 0666);
+#endif
+    if(-1 != fd) {
+        for (int i = 0; i < count; i++)
+        {
+            if (!str)
+                str = cpu_boost_log_getlog_next();
+            if (str)
+            {
+               fdprintf(fd, "%s\n", str);
+               str = NULL;
+            }
+        }
+
+        close(fd);
+        return true;
+    }
+
     return false;
 }
 #endif
@@ -2474,19 +2563,25 @@ static bool dbg_skin_engine(void)
 #if defined(HAVE_BOOTDATA) && !defined(SIMULATOR)
 static bool dbg_boot_data(void)
 {
-    unsigned int crc = 0;
+    unsigned int crc = crc_32(boot_data.payload, boot_data.length, 0xffffffff);
     struct simplelist_info info;
     info.scroll_all = true;
     simplelist_info_init(&info, "Boot data", 1, NULL);
     simplelist_set_line_count(0);
-    crc = crc_32(boot_data.payload, boot_data.length, 0xffffffff);
+
 #if defined(HAVE_MULTIBOOT)
+    char rootpath[MAX_PATH / 2] = RB_ROOT_CONTENTS_DIR;
     int boot_volume = 0;
     if(crc == boot_data.crc)
     {
         boot_volume = boot_data.boot_volume; /* boot volume contained in uint8_t payload */
+        int rtlen = get_redirect_dir(rootpath, sizeof(rootpath), boot_volume, "", "");
+        while (rtlen > 0 && rootpath[--rtlen] == PATH_SEPCH) /* remove extra separators */
+            rootpath[rtlen] = '\0';
     }
     simplelist_addline("Boot Volume: <%lu>", boot_volume);
+    simplelist_addline("Root:");
+    simplelist_addline("%s", rootpath);
     simplelist_addline("");
 #endif
     simplelist_addline("Bootdata RAW:");
@@ -2604,7 +2699,8 @@ static const struct {
 #endif
 #endif /* HAVE_USBSTACK */
 #ifdef CPU_BOOST_LOGGING
-        {"cpu_boost log",cpu_boost_log},
+        {"Show cpu_boost log",cpu_boost_log},
+        {"Dump cpu_boost log",cpu_boost_log_dump},
 #endif
 #if (defined(HAVE_WHEEL_ACCELERATION) && (CONFIG_KEYPAD==IPOD_4G_PAD) \
      && !defined(IPOD_MINI) && !defined(SIMULATOR))
@@ -2645,6 +2741,24 @@ static const char* menu_get_name(int item, void * data,
     return menuitems[item].desc;
 }
 
+static int menu_get_talk(int item, void *data)
+{
+    (void)data;
+    if (global_settings.talk_menu && menuitems[item].desc)
+    {
+        talk_number(item + 1, true);
+        talk_id(VOICE_PAUSE, true);
+#if 0 /* no debug items currently have lang ids */
+        long id = P2ID((const unsigned char *)(menuitems[item].desc));
+        if(id>=0)
+            talk_id(id, true);
+        else
+#endif
+        talk_spell(menuitems[item].desc, true);
+     }
+    return 0;
+}
+
 int debug_menu(void)
 {
     struct simplelist_info info;
@@ -2652,6 +2766,7 @@ int debug_menu(void)
     simplelist_info_init(&info, "Debug Menu", ARRAYLEN(menuitems), NULL);
     info.action_callback = menu_action_callback;
     info.get_name        = menu_get_name;
+    info.get_talk        = menu_get_talk;
     return (simplelist_show_list(&info)) ? 1 : 0;
 }
 

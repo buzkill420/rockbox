@@ -127,7 +127,6 @@ static const struct button_mapping button_context_quickscreen[] = {
 
 /** Settings - General Mappings **/
 static const struct button_mapping button_context_settings[] = {
-    { ACTION_SETTINGS_RESET,     BUTTON_PLAY,                 BUTTON_NONE },
     { ACTION_SETTINGS_INC,       BUTTON_BWD,                  BUTTON_NONE },
     { ACTION_SETTINGS_INCREPEAT, BUTTON_BWD|BUTTON_REPEAT,    BUTTON_NONE },
     { ACTION_SETTINGS_DEC,       BUTTON_FWD,                  BUTTON_NONE },
@@ -175,7 +174,7 @@ static const struct button_mapping button_context_tree_scroll_lr[] = {
 /** Yes/No Screen **/
 static const struct button_mapping button_context_yesnoscreen[] = {
     { ACTION_YESNO_ACCEPT,          BUTTON_PLAY,              BUTTON_NONE },
-    LAST_ITEM_IN_LIST
+    LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD)
 }; /* button_context_settings_yesnoscreen */
 
 /* get_context_mapping returns a pointer to one of the above defined arrays depending on the context */

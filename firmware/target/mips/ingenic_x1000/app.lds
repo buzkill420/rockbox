@@ -6,6 +6,13 @@ OUTPUT_ARCH(MIPS)
 ENTRY(_start)
 STARTUP(target/mips/ingenic_x1000/crt0.o)
 
+#ifdef BOOTLOADER
+# undef PLUGIN_BUFFER_SIZE
+# undef CODEC_SIZE
+# define PLUGIN_BUFFER_SIZE 0
+# define CODEC_SIZE 0
+#endif
+
 /* End of the audio buffer, where the codec buffer starts */
 #define ENDAUDIOADDR (X1000_DRAM_END - PLUGIN_BUFFER_SIZE - CODEC_SIZE)
 
@@ -16,6 +23,7 @@ MEMORY
 {
     IRAM : ORIGIN = X1000_IRAM_BASE, LENGTH = X1000_IRAM_SIZE
     DRAM : ORIGIN = X1000_DRAM_BASE, LENGTH = X1000_DRAM_SIZE
+    TCSM : ORIGIN = X1000_TCSM_BASE, LENGTH = X1000_TCSM_SIZE
 }
 
 SECTIONS
@@ -61,6 +69,14 @@ SECTIONS
     } > IRAM
     _iramcopy = LOADADDR(.iram);
 
+    .tcsm X1000_TCSM_BASE: AT (_bssbegin + SIZEOF(.iram))
+    {
+        _tcsmstart = .;
+        KEEP(*(.tcsm*));
+        _tcsmend = .;
+    } > TCSM
+    _tcsmcopy = LOADADDR(.tcsm);
+
     . = ALIGN(4);
     .stack (NOLOAD) :
     {
@@ -88,10 +104,8 @@ SECTIONS
     {
         . = ALIGN(4);
         audiobuffer = .;
-        loadbuffer = .;
     } > DRAM
 
-    loadbufferend = ENDAUDIOADDR;
     audiobufend = ENDAUDIOADDR;
     codecbuf = ENDAUDIOADDR;
     pluginbuf = ENDCODECADDR;

@@ -166,7 +166,7 @@ static int browser(void* param)
                     }
                 }
                 if (!in_hotswap)
-#endif
+#endif /*HAVE_HOTSWAP*/
                     strcpy(folder, last_folder);
             }
             push_current_activity(ACTIVITY_FILEBROWSER);
@@ -266,7 +266,7 @@ static int browser(void* param)
             tc->selected_item = last_db_selection;
             push_current_activity(ACTIVITY_DATABASEBROWSER);
         break;
-#endif
+#endif /*HAVE_TAGCACHE*/
     }
 
     browse_context_init(&browse, filter, 0, NULL, NOICON, folder, NULL);
@@ -634,6 +634,7 @@ static int item_callback(int action,
     }
     return action;
 }
+
 static int get_selection(int last_screen)
 {
     int i;
@@ -683,6 +684,7 @@ static inline int load_screen(int screen)
         last_screen = old_previous;
     return ret_val;
 }
+
 static int load_context_screen(int selection)
 {
     const struct menu_item_ex *context_menu = NULL;
@@ -705,33 +707,144 @@ static int load_context_screen(int selection)
     return retval;
 }
 
-static int load_plugin_screen(char *plug_path, void* plug_param)
+static int load_plugin_screen(char *key)
 {
-    int ret_val;
+    int ret_val = PLUGIN_ERROR;
+    int loops = 100;
     int old_previous = last_screen;
+    int old_global = global_status.last_screen;
     last_screen = next_screen;
     global_status.last_screen = (char)next_screen;
-    status_save();
+    /*status_save(); //only needed if we crash */
 
-    switch (plugin_load(plug_path, plug_param))
+    while(loops-- > 0) /* just to keep things from getting out of hand */
     {
-    case PLUGIN_GOTO_WPS:
-        ret_val = GO_TO_WPS;
-        break;
-    case PLUGIN_GOTO_PLUGIN:
-        ret_val = GO_TO_PLUGIN;
-        break;
-    case PLUGIN_OK:
-        ret_val = audio_status() ? GO_TO_PREVIOUS : GO_TO_ROOT;
-        break;
-    default:
-        ret_val = GO_TO_PREVIOUS;
-        break;
-    }
+        int opret = open_plugin_get_entry(key, &open_plugin_entry);
+        char *path = open_plugin_entry.path;
+        char *param = open_plugin_entry.param;
+        if (param[0] == '\0')
+            param = NULL;
 
-    if (ret_val == GO_TO_PREVIOUS)
-        last_screen = (old_previous == next_screen) ? GO_TO_ROOT : old_previous;
+        int ret = plugin_load(path, param);
+
+        if (ret == PLUGIN_USB_CONNECTED || ret == PLUGIN_ERROR)
+            ret_val = GO_TO_ROOT;
+        else if (ret == PLUGIN_GOTO_WPS)
+            ret_val = GO_TO_WPS;
+        else if (ret == PLUGIN_GOTO_PLUGIN)
+            continue;
+        else
+        {
+            /* Prevents infinite loop with WPS, Plugins, Previous Screen*/
+            if (ret == PLUGIN_OK && old_global == GO_TO_WPS && !audio_status())
+                ret_val = GO_TO_ROOT;
+            ret_val = GO_TO_PREVIOUS;
+            last_screen = (old_previous == next_screen || old_global == GO_TO_ROOT)
+                ? GO_TO_ROOT : old_previous;
+            if (last_screen == GO_TO_ROOT)
+                global_status.last_screen = GO_TO_ROOT;
+        }
+        /* ret_val != GO_TO_PLUGIN */
+
+        if (opret != OPEN_PLUGIN_NEEDS_FLUSHED || last_screen != GO_TO_WPS)
+        {
+            /* Keep the entry in case of GO_TO_PREVIOUS */
+            open_plugin_entry.hash = 0; /*remove hash -- prevents flush to disk */
+            open_plugin_entry.lang_id = LANG_PREVIOUS_SCREEN;
+            /*open_plugin_add_path(NULL, NULL, NULL);// clear entry */
+        }
+        break;
+    } /*while */
     return ret_val;
+}
+
+static void ignore_back_button_stub(bool ignore)
+{
+#if (CONFIG_PLATFORM&PLATFORM_ANDROID)
+    /* BACK button to be handled by Android instead of rockbox */
+    android_ignore_back_button(ignore);
+#else
+    (void) ignore;
+#endif
+}
+
+static int root_menu_setup_screens(void)
+{
+    int new_screen = next_screen;
+    if (global_settings.start_in_screen == 0)
+        new_screen = (int)global_status.last_screen;
+    else new_screen = global_settings.start_in_screen - 2;
+    if (new_screen == GO_TO_PLUGIN)
+    {
+        if (global_status.last_screen == GO_TO_SHORTCUTMENU)
+        {
+            /* Can make this any value other than GO_TO_SHORTCUTMENU
+               otherwise it takes over on startup when the user wanted
+               the plugin at key - LANG_START_SCREEN */
+            global_status.last_screen = GO_TO_PLUGIN;
+        }
+        if(global_status.last_screen == GO_TO_SHORTCUTMENU ||
+           global_status.last_screen == GO_TO_PLUGIN)
+        {
+            if (global_settings.start_in_screen == 0)
+            {  /* Start in: Previous Screen */
+                last_screen = GO_TO_PREVIOUS;
+                global_status.last_screen = GO_TO_ROOT;
+                /* since the plugin has GO_TO_PLUGIN as origin it
+                   will just return GO_TO_PREVIOUS <=> GO_TO_PLUGIN in a loop
+                   To allow exit after restart we check for GO_TO_ROOT
+                   if so exit to ROOT after the plugin exits */
+            }
+        }
+    }
+#if CONFIG_TUNER
+    add_event(PLAYBACK_EVENT_START_PLAYBACK, rootmenu_start_playback_callback);
+#endif
+    add_event(PLAYBACK_EVENT_TRACK_CHANGE, rootmenu_track_changed_callback);
+#ifdef HAVE_RTC_ALARM
+    int alarm_wake_up_screen = 0;
+    if ( rtc_check_alarm_started(true) )
+    {
+        rtc_enable_alarm(false);
+
+#if (defined(HAVE_RECORDING) || CONFIG_TUNER)
+        alarm_wake_up_screen = global_settings.alarm_wake_up_screen;
+#endif
+        switch (alarm_wake_up_screen)
+        {
+#if CONFIG_TUNER
+            case ALARM_START_FM:
+                new_screen = GO_TO_FM;
+                break;
+#endif
+#ifdef HAVE_RECORDING
+            case ALARM_START_REC:
+                recording_start_automatic = true;
+                new_screen = GO_TO_RECSCREEN;
+                break;
+#endif
+            default:
+                new_screen = GO_TO_WPS;
+                break;
+        } /* switch() */
+    }
+#endif /* HAVE_RTC_ALARM */
+
+#if defined(HAVE_HEADPHONE_DETECTION) || defined(HAVE_LINEOUT_DETECTION)
+    if (new_screen == GO_TO_WPS && global_settings.unplug_autoresume)
+    {
+       new_screen = GO_TO_ROOT;
+#ifdef HAVE_HEADPHONE_DETECTION
+        if (headphones_inserted())
+            new_screen = GO_TO_WPS;
+#endif
+#ifdef HAVE_LINEOUT_DETECTION
+        if (lineout_inserted())
+            new_screen = GO_TO_WPS;
+#endif
+    }
+#endif /*(HAVE_HEADPHONE_DETECTION) || (HAVE_LINEOUT_DETECTION)*/
+    return new_screen;
 }
 
 void root_menu(void)
@@ -741,47 +854,7 @@ void root_menu(void)
     int shortcut_origin = GO_TO_ROOT;
 
     push_current_activity(ACTIVITY_MAINMENU);
-
-    if (global_settings.start_in_screen == 0)
-        next_screen = (int)global_status.last_screen;
-    else next_screen = global_settings.start_in_screen - 2;
-#if CONFIG_TUNER
-    add_event(PLAYBACK_EVENT_START_PLAYBACK, rootmenu_start_playback_callback);
-#endif
-    add_event(PLAYBACK_EVENT_TRACK_CHANGE, rootmenu_track_changed_callback);
-#ifdef HAVE_RTC_ALARM
-    if ( rtc_check_alarm_started(true) )
-    {
-        rtc_enable_alarm(false);
-        next_screen = GO_TO_WPS;
-#if CONFIG_TUNER
-        if (global_settings.alarm_wake_up_screen == ALARM_START_FM)
-            next_screen = GO_TO_FM;
-#endif
-#ifdef HAVE_RECORDING
-        if (global_settings.alarm_wake_up_screen == ALARM_START_REC)
-        {
-            recording_start_automatic = true;
-            next_screen = GO_TO_RECSCREEN;
-        }
-#endif
-    }
-#endif /* HAVE_RTC_ALARM */
-
-#if defined(HAVE_HEADPHONE_DETECTION) || defined(HAVE_LINEOUT_DETECTION)
-    if (next_screen == GO_TO_WPS && global_settings.unplug_autoresume)
-    {
-       next_screen = GO_TO_ROOT;
-#ifdef HAVE_HEADPHONE_DETECTION
-        if (headphones_inserted())
-            next_screen = GO_TO_WPS;
-#endif
-#ifdef HAVE_LINEOUT_DETECTION
-        if (lineout_inserted())
-            next_screen = GO_TO_WPS;
-#endif
-    }
-#endif /*(HAVE_HEADPHONE_DETECTION) || (HAVE_LINEOUT_DETECTION)*/
+    next_screen = root_menu_setup_screens();
 
     while (true)
     {
@@ -793,22 +866,42 @@ void root_menu(void)
             case GO_TO_ROOT:
                 if (last_screen != GO_TO_ROOT)
                     selected = get_selection(last_screen);
-#if (CONFIG_PLATFORM&PLATFORM_ANDROID)
+                global_status.last_screen = GO_TO_ROOT; /* We've returned to ROOT */
                 /* When we are in the main menu we want the hardware BACK
-                 * button to be handled by Android instead of rockbox */
-                android_ignore_back_button(true);
-#endif
+                 * button to be handled by HOST instead of rockbox */
+                ignore_back_button_stub(true);
+
                 next_screen = do_menu(&root_menu_, &selected, NULL, false);
-#if (CONFIG_PLATFORM&PLATFORM_ANDROID)
-                android_ignore_back_button(false);
-#endif
+
+                ignore_back_button_stub(false);
+
                 if (next_screen != GO_TO_PREVIOUS)
                     last_screen = GO_TO_ROOT;
                 break;
+#ifdef HAVE_TAGCACHE
+            case GO_TO_FILEBROWSER:
+            case GO_TO_DBBROWSER:
+                previous_browser = next_screen;
+                goto load_next_screen;
+                break;
+#endif /* With !HAVE_TAGCACHE previous_browser is always GO_TO_FILEBROWSER */
+#if CONFIG_TUNER
+            case GO_TO_WPS:
+            case GO_TO_FM:
+                previous_music = next_screen;
+                goto load_next_screen;
+                break;
+#endif /* With !CONFIG_TUNER previous_music is always GO_TO_WPS */
 
             case GO_TO_PREVIOUS:
+            {
                 next_screen = last_screen;
+                if (last_screen == GO_TO_PLUGIN)/* for WPS */
+                    last_screen = GO_TO_PREVIOUS;
+                else if (last_screen == GO_TO_PREVIOUS)
+                    next_screen = GO_TO_ROOT;
                 break;
+            }
 
             case GO_TO_PREVIOUS_BROWSER:
                 next_screen = previous_browser;
@@ -822,11 +915,13 @@ void root_menu(void)
                 break;
             case GO_TO_PLUGIN:
             {
+
                 char *key;
                 if (global_status.last_screen == GO_TO_SHORTCUTMENU)
                 {
+                    if (open_plugin_entry.lang_id == LANG_OPEN_PLUGIN)
+                        open_plugin_entry.lang_id = LANG_SHORTCUTS;
                     shortcut_origin = last_screen;
-                    global_status.last_screen = last_screen;
                     key = ID2P(LANG_SHORTCUTS);
                 }
                 else
@@ -842,48 +937,44 @@ void root_menu(void)
                         case GO_TO_SHORTCUTMENU:
                             key = ID2P(LANG_SHORTCUTS);
                             break;
+                        case GO_TO_PREVIOUS:
+                            key = ID2P(LANG_PREVIOUS_SCREEN);
+                            break;
                         default:
                             key = ID2P(LANG_OPEN_PLUGIN);
                             break;
                     }
                 }
 
-                bool flush = (open_plugin_get_entry(key, &open_plugin_entry) == -2);
-                char *path = open_plugin_entry.path;
-                char *param = open_plugin_entry.param;
-                if (param[0] == '\0')
-                    param = NULL;
+                next_screen = load_plugin_screen(key);
 
-                next_screen = load_plugin_screen(path, param);
-
-                if (!flush && next_screen != GO_TO_PLUGIN)
-                    open_plugin_add_path(NULL, NULL, NULL);
-
-                /* shortcuts may take several trips through the GO_TO_PLUGIN case
-                   make sure we preserve and restore the origin */
-                if (next_screen == GO_TO_PREVIOUS && shortcut_origin != GO_TO_ROOT)
+                if (next_screen == GO_TO_PREVIOUS)
                 {
-                    if (shortcut_origin != GO_TO_WPS)
-                        next_screen = shortcut_origin;
-                    shortcut_origin = GO_TO_ROOT;
+                    /* shortcuts may take several trips through the GO_TO_PLUGIN
+                       case make sure we preserve and restore the origin */
+                    if (shortcut_origin != GO_TO_ROOT)
+                    {
+                        if (shortcut_origin != GO_TO_WPS)
+                            next_screen = shortcut_origin;
+                        shortcut_origin = GO_TO_ROOT;
+                    }
+                    /* skip GO_TO_PREVIOUS */
+                    if (last_screen == GO_TO_BROWSEPLUGINS)
+                    {
+                        next_screen = last_screen;
+                        last_screen = GO_TO_PLUGIN;
+                    }
                 }
-
                 previous_browser = (next_screen != GO_TO_WPS) ? GO_TO_FILEBROWSER : GO_TO_PLUGIN;
                 break;
             }
             default:
-#ifdef HAVE_TAGCACHE
-/* With !HAVE_TAGCACHE previous_browser is always GO_TO_FILEBROWSER */
-                if (next_screen == GO_TO_FILEBROWSER || next_screen == GO_TO_DBBROWSER)
-                    previous_browser = next_screen;
-#endif
-#if CONFIG_TUNER
-/* With !CONFIG_TUNER previous_music is always GO_TO_WPS */
-                if (next_screen == GO_TO_WPS || next_screen == GO_TO_FM)
-                    previous_music = next_screen;
-#endif
-                next_screen = load_screen(next_screen);
+                goto load_next_screen;
                 break;
         } /* switch() */
+        continue;
+load_next_screen: /* load_screen is inlined */
+        next_screen = load_screen(next_screen);
     }
+
 }

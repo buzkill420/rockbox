@@ -81,38 +81,22 @@ void powermgmt_init(void) INIT_ATTR;
 /* Generic current values that are intentionally meaningless - config header
  * should define proper numbers.*/
 
-
-#ifndef CURRENT_BACKLIGHT
-#define CURRENT_BACKLIGHT  5  /* additional current when backlight always on */
-#endif
-
-#if defined(HAVE_RECORDING) && !defined(CURRENT_RECORD)
-#define CURRENT_RECORD     2  /* additional recording current */
-#endif /* HAVE_RECORDING && !CURRENT_RECORD*/
-
 #ifndef CURRENT_USB
 #define CURRENT_USB       2 /* usual current in mA in USB mode */
 #endif
 
-#if defined(HAVE_REMOTE_LCD) && !defined(CURRENT_REMOTE)
-#define CURRENT_REMOTE      2  /* additional current when remote connected */
-#endif /* CURRENT_REMOTE && !HAVE_REMOTE_LCD */
-
-#if CONFIG_CHARGING
-#ifndef CURRENT_MAX_CHG
+#if CONFIG_CHARGING && !defined(CURRENT_MAX_CHG)
 #define CURRENT_MAX_CHG   350  /* maximum charging current */
-#endif
-#endif /* CONFIG_CHARGING */
-
-#ifdef CHARGING_DEBUG_FILE
-#define POWERMGMT_DEBUG_STACK ((0x1000)/sizeof(long))
-#else
-#define POWERMGMT_DEBUG_STACK 0
 #endif
 
 #ifndef BATT_AVE_SAMPLES
 /* slw filter constant unless otherwise specified */
 #define BATT_AVE_SAMPLES 128
+#endif
+
+#ifndef BATT_CURRENT_AVE_SAMPLES
+/* semi arbitrary but needs to be 'large' for the time estimation algorithm */
+#define BATT_CURRENT_AVE_SAMPLES 128
 #endif
 
 #ifndef POWER_THREAD_STEP_TICKS
@@ -132,11 +116,15 @@ extern const unsigned short percent_to_volt_charge[11];
 int battery_level(void); /* percent */
 int battery_time(void); /* minutes */
 int battery_voltage(void); /* filtered batt. voltage in millivolts */
+int battery_current(void); /* battery current in milliamps
+                            * (may just be a rough estimate) */
 
 /* Implemented by the target, unfiltered */
 int _battery_level(void); /* percent */
 int _battery_time(void); /* minutes */
 int _battery_voltage(void); /* voltage in millivolts */
+int _battery_current(void); /* (dis)charge current in milliamps */
+
 #if CONFIG_CHARGING >= CHARGING_TARGET
 void powermgmt_init_target(void);
 void charging_algorithm_close(void);
@@ -163,8 +151,10 @@ void battery_read_info(int *voltage, int *level);
 bool battery_level_safe(void);
 
 void set_poweroff_timeout(int timeout);
+#if BATTERY_CAPACITY_INC > 0
 void set_battery_capacity(int capacity); /* set local battery capacity value */
-int  get_battery_capacity(void); /* get local battery capacity value */
+#endif
+int get_battery_capacity(void); /* get local battery capacity value */
 void set_battery_type(int type); /* set local battery type */
 
 void set_sleeptimer_duration(int minutes);

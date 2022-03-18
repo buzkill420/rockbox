@@ -47,7 +47,9 @@
 #include "screens.h"
 #include "talk.h"
 #include "yesno.h"
-
+#ifdef HAVE_ALBUMART
+#include "playback.h"
+#endif
 
 #define MAX_SHORTCUT_NAME 32
 #define SHORTCUTS_FILENAME ROCKBOX_DIR "/shortcuts.txt"
@@ -236,6 +238,19 @@ static void shortcuts_ata_idle_callback(void)
         write(fd, buf, len);
         if (sc->type == SHORTCUT_SETTING)
             write(fd, sc->u.setting->cfg_name, strlen(sc->u.setting->cfg_name));
+        else if (sc->type == SHORTCUT_TIME)
+        {
+#if CONFIG_RTC
+            if (sc->u.timedata.talktime)
+                write(fd, "talk", 4);
+            else
+#endif
+            {
+                write(fd, "sleep ", 6);
+                len = snprintf(buf, MAX_PATH, "%d", sc->u.timedata.sleep_timeout);
+                write(fd, buf, len);
+            }
+        }
         else
             write(fd, sc->u.path, strlen(sc->u.path));
 
@@ -297,18 +312,22 @@ static int readline_cb(int n, char *buf, void *parameters)
     }
     else if (sc && settings_parseline(buf, &name, &value))
     {
-        if (!strcmp(name, "type"))
+        static const char *nm_options[] = {"type", "name", "data",
+                                        "icon", "talkclip", NULL};
+        int nm_op = string_option(name, nm_options, false);
+
+        if (nm_op == 0) /*type*/
         {
             int t = 0;
             for (t=0; t<SHORTCUT_TYPE_COUNT && sc->type == SHORTCUT_UNDEFINED; t++)
                 if (!strcmp(value, type_strings[t]))
                     sc->type = t;
         }
-        else if (!strcmp(name, "name"))
+        else if (nm_op == 1) /*name*/
         {
             strlcpy(sc->name, value, MAX_SHORTCUT_NAME);
         }
-        else if (!strcmp(name, "data"))
+        else if (nm_op == 2) /*data*/
         {
             switch (sc->type)
             {
@@ -342,7 +361,7 @@ static int readline_cb(int n, char *buf, void *parameters)
                     break;
             }
         }
-        else if (!strcmp(name, "icon"))
+        else if (nm_op == 3) /*icon*/
         {
             if (!strcmp(value, "filetype") && sc->type != SHORTCUT_SETTING && sc->u.path[0])
             {
@@ -353,7 +372,7 @@ static int readline_cb(int n, char *buf, void *parameters)
                 sc->icon = atoi(value);
             }
         }
-        else if (!strcmp(name, "talkclip"))
+        else if (nm_op == 4) /*talkclip*/
         {
             strlcpy(sc->talk_clip, value, MAX_PATH);
         }
@@ -436,10 +455,14 @@ static int shortcut_menu_get_action(int action, struct gui_synclist *lists)
         int selection = gui_synclist_get_sel_pos(lists);
 
         if (!yesno_pop(ID2P(LANG_REALLY_DELETE)))
+        {
+            gui_synclist_set_title(lists, lists->title, lists->title_icon);
             return ACTION_REDRAW;
+        }
 
         remove_shortcut(selection);
         gui_synclist_set_nb_items(lists, shortcut_count);
+        gui_synclist_set_title(lists, lists->title, lists->title_icon);
         if (selection >= shortcut_count)
             gui_synclist_select_item(lists, shortcut_count - 1);
         first_idx_to_writeback = 0;
@@ -599,6 +622,7 @@ int do_shortcut_menu(void *ignored)
 
     while (done == GO_TO_PREVIOUS)
     {
+        list.count = shortcut_count;
         if (simplelist_show_list(&list))
             break; /* some error happened?! */
         if (list.selection == -1)
@@ -619,7 +643,7 @@ int do_shortcut_menu(void *ignored)
                     }
                     else
                     {
-                        onplay_show_playlist_menu(sc->u.path);
+                        onplay_show_playlist_menu(sc->u.path, NULL);
                     }
                     break;
                 case SHORTCUT_FILE:
@@ -645,9 +669,23 @@ int do_shortcut_menu(void *ignored)
                 }
                 break;
                 case SHORTCUT_SETTING:
+                {
+                    int old_sleeptimer_duration = global_settings.sleeptimer_duration;
+#ifdef HAVE_ALBUMART
+                    int old_album_art = global_settings.album_art;
+#endif
                     do_setting_screen(sc->u.setting,
                             sc->name[0] ? sc->name : P2STR(ID2P(sc->u.setting->lang_id)),NULL);
+
+#ifdef HAVE_ALBUMART
+                    if (old_album_art != global_settings.album_art)
+                        set_albumart_mode(global_settings.album_art);
+#endif
+                    if (old_sleeptimer_duration != global_settings.sleeptimer_duration &&
+                        get_sleep_timer())
+                        set_sleeptimer_duration(global_settings.sleeptimer_duration);
                     break;
+                }
                 case SHORTCUT_DEBUGITEM:
                     run_debug_screen(sc->u.path);
                     break;
@@ -669,7 +707,7 @@ int do_shortcut_menu(void *ignored)
                     {
                         char timer_buf[10];
                         set_sleeptimer_duration(sc->u.timedata.sleep_timeout);
-                        splashf(HZ, "%s (%s)", str(LANG_SLEEP_TIMER), 
+                        splashf(HZ, "%s (%s)", str(LANG_SLEEP_TIMER),
                                 sleep_timer_formatter(timer_buf, sizeof(timer_buf),
                                                       sc->u.timedata.sleep_timeout, NULL));
                     }

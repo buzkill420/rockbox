@@ -82,6 +82,14 @@ you to configure settings related to audio playback.
   set to \setting{Yes}, your music will fade out when you stop or pause 
   playback, and fade in when you resume playback.
     
+\section{Single Mode}
+  If the Single Mode  option is  set to \setting{Track}, your music
+  will pause at every automatic track change.
+  If it is set to \setting{Album}, \setting{Album Artist}, \setting{Artist},
+  \setting{Composer}, \setting{Work}, or \setting{Genre},
+  your music will pause at the next track change where this tag also
+  changes. Crossfade on track change will be ignored if this setting is enabled.
+
 \section{Party Mode}
   Enables unstoppable music playback. When new songs are
   selected, they are queued at the end of the current dynamic playlist
@@ -141,7 +149,8 @@ you to configure settings related to audio playback.
 
         The graphic below illustrates how the different settings work in practice.
 
-       \includegraphics[width=14cm]{configure_rockbox/images/crossfade_graphic.png}
+       \Ifpdfoutput{\includegraphics[width=14cm]{configure_rockbox/images/crossfade_graphic.png}}
+       {\includegraphics{configure_rockbox/images/crossfade_graphic.png}}
   }%\opt{crossfade}
     
 \section{\label{ref:ReplayGain}Replaygain}
@@ -314,4 +323,12 @@ you to configure settings related to audio playback.
     \note{For best quality and battery life, select the sampling rate used by
     your audio.  This is typically 44.1kHz.}
     \note{Opus files are always 48kHz.}
+}
+
+\opt{albumart}{
+  \section{Album Art}
+    Album art will not be loaded or displayed when set to \setting{Off}.
+    To prefer loading album art that is stored in a separate image file, set to
+    \setting{Prefer Image File}. The default behavior is to
+    \setting{Prefer Embedded} album art.
 }

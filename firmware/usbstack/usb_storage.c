@@ -71,7 +71,7 @@
 #endif /* USB_READ_BUFFER_SIZE */
 
 /* We don't use sizeof() here, because we *need* a multiple of 32 */
-#define MAX_CBW_SIZE 32
+#define MAX_CBW_SIZE 512
 
 #ifdef USB_WRITE_BUFFER_SIZE
 #define WRITE_BUFFER_SIZE USB_WRITE_BUFFER_SIZE
@@ -449,12 +449,11 @@ void usb_storage_init_connection(void)
 #endif
 #else
     unsigned char * buffer;
-    /* dummy ops with no callbacks, needed because by
-     * default buflib buffers can be moved around which must be avoided */
-    static struct buflib_callbacks dummy_ops;
 
     // Add 31 to handle worst-case misalignment
-    usb_handle = core_alloc_ex("usb storage", ALLOCATE_BUFFER_SIZE + MAX_CBW_SIZE + 31, &dummy_ops);
+    usb_handle = core_alloc_ex("usb storage",
+                               ALLOCATE_BUFFER_SIZE + MAX_CBW_SIZE + 31,
+                               &buflib_ops_locked);
     if (usb_handle < 0)
         panicf("%s(): OOM", __func__);
 
@@ -470,7 +469,7 @@ void usb_storage_init_connection(void)
     ramdisk_buffer = tb.transfer_buffer + ALLOCATE_BUFFER_SIZE;
 #endif
 #endif
-    usb_drv_recv(ep_out, cbw_buffer, MAX_CBW_SIZE);
+    usb_drv_recv_nonblocking(ep_out, cbw_buffer, MAX_CBW_SIZE);
 
     int i;
     for(i=0;i<storage_num_drives();i++) {
@@ -589,17 +588,6 @@ void usb_storage_transfer_complete(int ep,int dir,int status,int length)
             }
             handle_scsi(cbw);
             break;
-#if 0
-            if(cur_cmd.cur_cmd == SCSI_WRITE_10)
-            {
-                queue_broadcast(SYS_USB_WRITE_DATA, (cur_cmd.lun<<16)+cur_cmd.orig_count);
-            }
-            else if(cur_cmd.cur_cmd == SCSI_READ_10)
-            {
-                queue_broadcast(SYS_USB_READ_DATA, (cur_cmd.lun<<16)+cur_cmd.orig_count);
-            }
-#endif
-            break;
         case SENDING_RESULT:
             if(dir==USB_DIR_OUT) {
                 logf("OUT received in SENDING");
@@ -673,11 +661,13 @@ void usb_storage_transfer_complete(int ep,int dir,int status,int length)
 }
 
 /* called by usb_core_control_request() */
-bool usb_storage_control_request(struct usb_ctrlrequest* req, unsigned char* dest)
+bool usb_storage_control_request(struct usb_ctrlrequest* req, void* reqdata, unsigned char* dest)
 {
     bool handled = false;
 
     (void)dest;
+    (void)reqdata;
+
     switch (req->bRequest) {
         case USB_BULK_GET_MAX_LUN: {
             *tb.max_lun = storage_num_drives() - 1;
@@ -685,8 +675,7 @@ bool usb_storage_control_request(struct usb_ctrlrequest* req, unsigned char* des
             if(skip_first) (*tb.max_lun) --;
 #endif
             logf("ums: getmaxlun");
-            usb_drv_recv(EP_CONTROL, NULL, 0); /* ack */
-            usb_drv_send(EP_CONTROL, tb.max_lun, 1);
+            usb_drv_control_response(USB_CONTROL_ACK, tb.max_lun, 1);
             handled = true;
             break;
         }
@@ -701,7 +690,7 @@ bool usb_storage_control_request(struct usb_ctrlrequest* req, unsigned char* des
             usb_drv_reset_endpoint(ep_in, false);
             usb_drv_reset_endpoint(ep_out, true);
 #endif
-            usb_drv_send(EP_CONTROL, NULL, 0);  /* ack */
+            usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
             handled = true;
             break;
     }
@@ -1187,14 +1176,14 @@ static void send_command_failed_result(void)
 #if CONFIG_RTC
 static void receive_time(void)
 {
-    usb_drv_recv(ep_out, tb.transfer_buffer, 12);
+    usb_drv_recv_nonblocking(ep_out, tb.transfer_buffer, 12);
     state = RECEIVING_TIME;
 }
 #endif /* CONFIG_RTC */
 
 static void receive_block_data(void *data,int size)
 {
-    usb_drv_recv(ep_out, data, size);
+    usb_drv_recv_nonblocking(ep_out, data, size);
     state = RECEIVING_BLOCKS;
 }
 
@@ -1210,7 +1199,7 @@ static void send_csw(int status)
     state = WAITING_FOR_CSW_COMPLETION_OR_COMMAND;
     //logf("CSW: %X",status);
     /* Already start waiting for the next command */
-    usb_drv_recv(ep_out, cbw_buffer, MAX_CBW_SIZE);
+    usb_drv_recv_nonblocking(ep_out, cbw_buffer, MAX_CBW_SIZE);
     /* The next completed transfer will be either the CSW one
      * or the new command */
 

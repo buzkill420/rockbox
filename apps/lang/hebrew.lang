@@ -14,6 +14,8 @@
 # This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
 # KIND, either express or implied.
 #
+# LANGUAGE_IS_RTL
+#
 # Hebrew language file, translated by:
 # - Ariel Saghiv
 # - Liberman Shachar
@@ -1458,6 +1460,20 @@
   </dest>
   <voice>
     *: "עמעום צליל בעצירה והפסקה"
+  </voice>
+</phrase>
+<phrase>
+  id: LANG_SINGLE_MODE
+  desc: single mode
+  user: core
+  <source>
+    *: "Single Mode"
+  </source>
+  <dest>
+    *: "מצב יחדי"
+  </dest>
+  <voice>
+    *: "מצב יחדי"
   </voice>
 </phrase>
 <phrase>
@@ -10328,15 +10344,15 @@
   user: core
   <source>
     *: none
-    gigabeatfx,sansafuzeplus: "Touchpad Sensitivity"
+    fiiom3k,gigabeatfx,sansafuzeplus: "Touchpad Sensitivity"
   </source>
   <dest>
     *: none
-    gigabeatfx,sansafuzeplus: "רגישות משטח מגע"
+    fiiom3k,gigabeatfx,sansafuzeplus: "רגישות משטח מגע"
   </dest>
   <voice>
     *: none
-    gigabeatfx,sansafuzeplus: "רגישות משטח מגע"
+    fiiom3k,gigabeatfx,sansafuzeplus: "רגישות משטח מגע"
   </voice>
 </phrase>
 <phrase>

@@ -33,6 +33,7 @@ logf.c
 #endif /* ROCKBOX_HAS_LOGF */
 #if (CONFIG_PLATFORM & PLATFORM_NATIVE)
 load_code.c
+linuxboot.c
 #ifdef RB_PROFILE
 profile.c
 #endif /* RB_PROFILE */
@@ -46,9 +47,12 @@ timer.c
 debug.c
 #endif /* PLATFORM_NATIVE */
 panic.c
-
 #if (CONFIG_PLATFORM & PLATFORM_HOSTED) && defined(BOOTFILE)
 target/hosted/rolo.c
+#endif
+
+#if defined(HAVE_BOOTDATA) || defined(HAVE_MULTIBOOT)
+common/multiboot.c
 #endif
 
 #ifdef HAVE_SDL
@@ -259,6 +263,7 @@ common/dircache.c
 common/pathfuncs.c
 common/fdprintf.c
 common/linked_list.c
+common/rb_namespace.c
 common/strcasecmp.c
 common/strcasestr.c
 common/strnatcmp.c
@@ -1641,6 +1646,7 @@ drivers/nand_id.c
 #if CONFIG_CPU == X1000
 target/mips/ingenic_x1000/crt0.S
 target/mips/ingenic_x1000/aic-x1000.c
+target/mips/ingenic_x1000/boot-x1000.c
 target/mips/ingenic_x1000/clk-x1000.c
 target/mips/ingenic_x1000/debug-x1000.c
 target/mips/ingenic_x1000/dma-x1000.c
@@ -1668,6 +1674,10 @@ target/mips/ingenic_x1000/installer-x1000.c
 target/mips/ingenic_x1000/spl-start.S
 target/mips/ingenic_x1000/spl-x1000.c
 common/ucl_decompress.c
+#endif
+#if (defined(HAVE_X1000_ICODEC_PLAY) || defined(HAVE_X1000_ICODEC_REC)) \
+ && !defined(BOOTLOADER)
+drivers/audio/x1000-codec.c
 #endif
 #endif /* CONFIG_CPU == X1000 */
 

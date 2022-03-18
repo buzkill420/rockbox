@@ -172,6 +172,8 @@ static struct mutex id3_mutex SHAREDBSS_ATTR; /* (A,O)*/
 #define MAX_MULTIPLE_AA SKINNABLE_SCREENS_COUNT
 #ifdef HAVE_ALBUMART
 
+static int albumart_mode = -1;
+
 static struct albumart_slot
 {
     struct dim dim;     /* Holds width, height of the albumart */
@@ -1690,6 +1692,15 @@ static bool audio_load_cuesheet(struct track_info *infop,
 }
 
 #ifdef HAVE_ALBUMART
+
+void set_albumart_mode(int setting)
+{
+    if (albumart_mode != -1 &&
+        albumart_mode != setting)
+        playback_update_aa_dims();
+    albumart_mode = setting;
+}
+
 /* Load any album art for the file - returns false if the buffer is full */
 static int audio_load_albumart(struct track_info *infop,
                                 struct mp3entry *track_id3)
@@ -1709,18 +1720,28 @@ static int audio_load_albumart(struct track_info *infop,
         memset(&user_data, 0, sizeof(user_data));
         user_data.dim = &albumart_slots[i].dim;
 
+        char path[MAX_PATH];
+        if(global_settings.album_art == AA_PREFER_IMAGE_FILE &&
+           find_albumart(track_id3, path, sizeof(path),
+                          &albumart_slots[i].dim))
+        {
+                user_data.embedded_albumart = NULL;
+                hid = bufopen(path, 0, TYPE_BITMAP, &user_data);
+        }
+
         /* We can only decode jpeg for embedded AA */
-        if (track_id3->has_embedded_albumart && track_id3->albumart.type == AA_TYPE_JPG)
+        if (global_settings.album_art != AA_OFF &&
+            hid < 0 && hid != ERR_BUFFER_FULL &&
+            track_id3->has_embedded_albumart && track_id3->albumart.type == AA_TYPE_JPG)
         {
             user_data.embedded_albumart = &track_id3->albumart;
             hid = bufopen(track_id3->path, 0, TYPE_BITMAP, &user_data);
         }
 
-        if (hid < 0 && hid != ERR_BUFFER_FULL)
+        if (global_settings.album_art != AA_OFF &&
+            hid < 0 && hid != ERR_BUFFER_FULL)
         {
             /* No embedded AA or it couldn't be loaded - try other sources */
-            char path[MAX_PATH];
-
             if (find_albumart(track_id3, path, sizeof(path),
                               &albumart_slots[i].dim))
             {
@@ -1872,10 +1893,39 @@ static int audio_load_track(void)
          playlist_peek_offset);
 
     /* Get track name from current playlist read position */
+    int fd = -1;
     char path_buf[MAX_PATH + 1];
-    const char *path = playlist_peek(playlist_peek_offset,
-                                     path_buf,
-                                     sizeof (path_buf));
+    const char *path;
+
+    while (1)
+    {
+        path = playlist_peek(playlist_peek_offset,
+                             path_buf,
+                             sizeof (path_buf));
+
+        if (!path)
+            break;
+
+        /* Test for broken playlists by probing for the files */
+        if (file_exists(path))
+        {
+            fd = open(path, O_RDONLY);
+            if (fd >= 0)
+                break;
+        }
+        logf("Open failed %s", path);
+
+        /* only skip if failed track has a successor in playlist */
+        if (!playlist_peek(playlist_peek_offset + 1, NULL, 0))
+            break;
+
+        /* Skip invalid entry from playlist */
+        playlist_skip_entry(NULL, playlist_peek_offset);
+
+        /* Sync the playlist if it isn't finished */
+        if (playlist_peek(playlist_peek_offset, NULL, 0))
+            playlist_next(0);
+    }
 
     if (!path)
     {
@@ -1911,14 +1961,12 @@ static int audio_load_track(void)
         /* Load the metadata for the first unbuffered track */
         ub_id3 = id3_get(UNBUFFERED_ID3);
 
-        int fd = open(path, O_RDONLY);
         if (fd >= 0)
         {
             id3_mutex_lock();
             if(!get_metadata(ub_id3, fd, path))
                 wipe_mp3entry(ub_id3);
             id3_mutex_unlock();
-            close(fd);
         }
 
         if (filling != STATE_FULL)
@@ -1936,13 +1984,16 @@ static int audio_load_track(void)
         {
             track_list_free_info(&info);
             track_list.in_progress_hid = 0;
+            if (fd >= 0)
+                close(fd);
             return LOAD_TRACK_ERR_FAILED;
         }
 
         /* Successful load initiation */
         track_list.in_progress_hid = info.self_hid;
     }
-
+    if (fd >= 0)
+        close(fd);
     return LOAD_TRACK_OK;
 }
 
@@ -2339,6 +2390,31 @@ static void audio_on_handle_finished(int hid)
     }
 }
 
+static inline char* single_mode_get_id3_tag(struct mp3entry *id3)
+{
+    struct mp3entry *valid_id3 = valid_mp3entry(id3);
+    if (valid_id3 == NULL)
+        return NULL;
+
+    switch (global_settings.single_mode)
+    {
+        case SINGLE_MODE_ALBUM:
+            return valid_id3->album;
+        case SINGLE_MODE_ALBUM_ARTIST:
+            return valid_id3->albumartist;
+        case SINGLE_MODE_ARTIST:
+            return valid_id3->artist;
+        case SINGLE_MODE_COMPOSER:
+            return valid_id3->composer;
+        case SINGLE_MODE_GROUPING:
+            return valid_id3->grouping;
+        case SINGLE_MODE_GENRE:
+            return valid_id3->genre_string;
+    }
+
+    return NULL;
+}
+
 /* Called to make an outstanding track skip the current track and to send the
    transition events */
 static void audio_finalise_track_change(void)
@@ -2392,6 +2468,26 @@ static void audio_finalise_track_change(void)
     {
         buf_read_cuesheet(info.cuesheet_hid);
         track_id3 = bufgetid3(info.id3_hid);
+    }
+
+    if (SINGLE_MODE_OFF != global_settings.single_mode && global_settings.party_mode == 0 &&
+        ((skip_pending == TRACK_SKIP_AUTO) || (skip_pending == TRACK_SKIP_AUTO_NEW_PLAYLIST)))
+    {
+        bool single_mode_do_pause = true;
+        if (SINGLE_MODE_TRACK != global_settings.single_mode)
+        {
+            char *previous_tag = single_mode_get_id3_tag(id3_get(PLAYING_ID3));
+            char *new_tag = single_mode_get_id3_tag(track_id3);
+            single_mode_do_pause = previous_tag == NULL ||
+                                   new_tag == NULL ||
+                                   strcmp(previous_tag, new_tag) != 0;
+        }
+
+        if (single_mode_do_pause)
+        {
+            play_status = PLAY_PAUSED;
+            pcmbuf_pause(true);
+        }
     }
 
     id3_write(PLAYING_ID3, track_id3);

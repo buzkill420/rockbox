@@ -36,7 +36,7 @@ const unsigned short battery_level_dangerous[BATTERY_TYPES_COUNT] =
     3470
 };
 
-/* the OF shuts down at this voltage */
+/* The OF shuts down at this voltage */
 const unsigned short battery_level_shutoff[BATTERY_TYPES_COUNT] =
 {
     3400
@@ -45,13 +45,13 @@ const unsigned short battery_level_shutoff[BATTERY_TYPES_COUNT] =
 /* voltages (millivolt) of 0%, 10%, ... 100% when charging disabled */
 const unsigned short percent_to_volt_discharge[BATTERY_TYPES_COUNT][11] =
 {
-    { 3400, 3639, 3697, 3723, 3757, 3786, 3836, 3906, 3980, 4050, 4159 }
+    { 3400, 3477, 3540, 3578, 3617, 3674, 3771, 3856, 3936, 4016, 4117 }
 };
 
 /* voltages (millivolt) of 0%, 10%, ... 100% when charging enabled */
 const unsigned short percent_to_volt_charge[11] =
 {
-      3485, 3780, 3836, 3857, 3890, 3930, 3986, 4062, 4158, 4185, 4196
+      3400, 3477, 3540, 3578, 3617, 3674, 3771, 3856, 3936, 4016, 4117
 };
 
 void power_init(void)
@@ -63,10 +63,15 @@ void power_init(void)
     /* Set lowest sample rate */
     axp_adc_set_rate(AXP_ADC_RATE_25HZ);
 
-    /* Ensure battery voltage ADC is enabled */
-    int bits = axp_adc_get_enabled();
-    bits |= (1 << ADC_BATTERY_VOLTAGE);
-    axp_adc_set_enabled(bits);
+    /* Enable required ADCs */
+    axp_adc_set_enabled(
+        (1 << ADC_BATTERY_VOLTAGE) |
+        (1 << ADC_CHARGE_CURRENT) |
+        (1 << ADC_DISCHARGE_CURRENT) |
+        (1 << ADC_VBUS_VOLTAGE) |
+        (1 << ADC_VBUS_CURRENT) |
+        (1 << ADC_INTERNAL_TEMP) |
+        (1 << ADC_APS_VOLTAGE));
 
     /* Turn on all power outputs */
     i2c_reg_modify1(AXP_PMU_BUS, AXP_PMU_ADDR,
@@ -78,8 +83,11 @@ void power_init(void)
      * OF's setting, although it's not strictly within the USB spec. */
     axp_set_charge_current(780);
 
-    /* Short delay to give power outputs time to stabilize */
-    mdelay(5);
+    /* Delay to give power outputs time to stabilize.
+     * With the power thread delay, this can apparently go as low as 50,
+     * Keeping a higher value here just to ensure the bootloader works
+     * correctly. */
+    mdelay(200);
 }
 
 #ifdef HAVE_USB_CHARGING_ENABLE
@@ -108,3 +116,13 @@ int _battery_voltage(void)
 {
     return axp_adc_read(ADC_BATTERY_VOLTAGE);
 }
+
+#if CONFIG_BATTERY_MEASURE & CURRENT_MEASURE
+int _battery_current(void)
+{
+    if(charging_state())
+        return axp_adc_read(ADC_CHARGE_CURRENT);
+    else
+        return axp_adc_read(ADC_DISCHARGE_CURRENT);
+}
+#endif

@@ -150,6 +150,8 @@
 #define CONFIG_TUNER SI4700
 #define HAVE_TUNER_PWR_CTRL
 #define HAVE_RDS_CAP
+#define CONFIG_RDS (RDS_CFG_POLL | RDS_CFG_PROCESS)
+#define CONFIG_RDS_POLL_TICKS 4
 
 /* Define this for FM radio input available */
 #define HAVE_FMRADIO_IN
@@ -161,5 +163,6 @@
 /* Define current usage levels. */
 #define CURRENT_NORMAL     24 /* ~25h, on 600mAh that's about 24mA */
 #define CURRENT_BACKLIGHT  62 /* ~6,5h -> 92mA. Minus 24mA normal that gives us 68mA */
+#define CURRENT_RECORD      2 /* FIXME: placeholder value */
 
 #endif /* SIMULATOR */

@@ -39,11 +39,21 @@
 
 extern int usb_max_pkt_size;
 
+enum {
+    USB_STRING_INDEX_LANGUAGE,
+    USB_STRING_INDEX_MANUFACTURER,
+    USB_STRING_INDEX_PRODUCT,
+    USB_STRING_INDEX_SERIAL,
+    USB_STRING_INDEX_MAX,
+};
+
 struct usb_class_driver;
 
 void usb_core_init(void);
 void usb_core_exit(void);
-void usb_core_control_request(struct usb_ctrlrequest* req);
+void usb_core_control_request(struct usb_ctrlrequest* req, void* data);
+void usb_core_control_complete(int status);
+void usb_core_legacy_control_request(struct usb_ctrlrequest* req);
 void usb_core_transfer_complete(int endpoint,int dir,int status,int length);
 void usb_core_bus_reset(void);
 bool usb_core_any_exclusive_storage(void);

@@ -208,7 +208,7 @@ static void control_received(void) {
     /* acknowledge packet recieved (clear valid) */
     M66591_INTSTAT_MAIN &= ~(1<<3);
 
-    usb_core_control_request(&temp);
+    usb_core_legacy_control_request(&temp);
 }
 
 /* This is a helper function, it is used to notife the stack that a transfer is
@@ -869,7 +869,7 @@ int usb_drv_send(int endpoint, void* ptr, int length)
 /* This function begins a receive (on an OUT endpoint), it should not block
  *  so the actual receive is done in the interrupt handler.
  */
-int usb_drv_recv(int endpoint, void* ptr, int length)
+int usb_drv_recv_nonblocking(int endpoint, void* ptr, int length)
 {
     return mxx_queue(endpoint, ptr, length, false, false);
 }

@@ -50,10 +50,13 @@ if ($def_type eq "rb_defines") {
         '^SYS_(TIMEOUT|POWEROFF|BATTERY_UPDATE)$',
         '^SYS_USB_(DIS|)CONNECTED$',
         '^HOME_DIR$',
+        '^PLUGIN(_OK|_USB_CONNECTED|_POWEROFF|_GOTO_WPS|_GOTO_PLUGIN)$',
         '^PLUGIN_DIR$',
         '^PLUGIN(_APPS_|_GAMES_|_)DATA_DIR$',
         '^ROCKBOX_DIR$',
         '^STYLE_(NONE|DEFAULT|INVERT|COLORBAR|GRADIENT|COLORED)',
+        '^CORE_KEYMAP_FILE$',
+        'CONTEXT_(STOPSEARCHING|REMOTE|CUSTOM|CUSTOM2|PLUGIN|REMAPPED)$',
         '^VIEWERS_DATA_DIR$');
 }
 elsif ($def_type eq "sound_defines") {

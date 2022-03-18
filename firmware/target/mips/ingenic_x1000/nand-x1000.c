@@ -190,8 +190,10 @@ static void setup_chip_registers(nand_drv* drv)
 
 int nand_open(nand_drv* drv)
 {
-    if(drv->refcount > 0)
+    if(drv->refcount > 0) {
+        drv->refcount++;
         return NAND_SUCCESS;
+    }
 
     /* Initialize the controller */
     sfc_open();
@@ -222,7 +224,8 @@ int nand_open(nand_drv* drv)
 
 void nand_close(nand_drv* drv)
 {
-    if(drv->refcount == 0)
+    --drv->refcount;
+    if(drv->refcount > 0)
         return;
 
     /* Let's reset the chip... the idea is to restore the registers
@@ -231,7 +234,6 @@ void nand_close(nand_drv* drv)
     mdelay(10);
 
     sfc_close();
-    drv->refcount--;
 }
 
 static uint8_t nand_wait_busy(nand_drv* drv)
@@ -290,14 +292,14 @@ int nand_read_bytes(nand_drv* drv, uint32_t byte_addr, uint32_t byte_len, void* 
         if(rc < 0)
             return rc;
 
-        memcpy(buffer, &drv->page_buf[offset], MIN(pg_size, byte_len));
+        memcpy(buffer, &drv->page_buf[offset], MIN(pg_size - offset, byte_len));
 
-        if(byte_len <= pg_size)
+        if(byte_len <= pg_size - offset)
             break;
 
+        byte_len -= pg_size - offset;
+        buffer += pg_size - offset;
         offset = 0;
-        byte_len -= pg_size;
-        buffer += pg_size;
         page++;
     }
 

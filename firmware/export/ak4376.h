@@ -22,7 +22,9 @@
 #ifndef __AK4376_H__
 #define __AK4376_H__
 
-#define AUDIOHW_CAPS (FILTER_ROLL_OFF_CAP|POWER_MODE_CAP)
+/* The target config must define this; defining it here would prevent
+   the target from supporting audio recording via an alternate codec. */
+/* #define AUDIOHW_CAPS (FILTER_ROLL_OFF_CAP|POWER_MODE_CAP) */
 #define AUDIOHW_HAVE_SHORT2_ROLL_OFF
 
 #define AK4376_MIN_VOLUME (-890)
@@ -144,8 +146,8 @@ extern void ak4376_set_filter_roll_off(int val);
  * and power-up / power-down sequences as a frequency switch, so both settings
  * are controlled by this function.
  *
- * high power mode -- use power_mode=0
- * low power mode  -- use power_mode=1
+ * high power mode -- use power_mode=SOUND_HIGH_POWER
+ * low power mode  -- use power_mode=SOUND_LOW_POWER
  */
 extern void ak4376_set_freqmode(int fsel, int mult, int power_mode);
 

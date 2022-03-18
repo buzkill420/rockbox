@@ -46,6 +46,7 @@
 #include "pathfuncs.h"
 #include "load_code.h"
 #include "file.h"
+#include "core_keymap.h"
 
 #if CONFIG_CHARGING
 #include "power.h"
@@ -346,12 +347,14 @@ static const struct plugin_api rockbox_api = {
     gui_syncyesno_run,
     simplelist_info_init,
     simplelist_show_list,
+    yesno_pop,
 
     /* action handling */
     get_custom_action,
     get_action,
 #ifdef HAVE_TOUCHSCREEN
     action_get_touchscreen_press,
+    action_get_touchscreen_press_in_vp,
 #endif
     action_userabort,
 
@@ -413,6 +416,7 @@ static const struct plugin_api rockbox_api = {
     FS_PREFIX(file_exists),
     strip_extension,
     crc_32,
+    crc_32r,
     filetype_get_attr,
 
     /* dir */
@@ -593,6 +597,7 @@ static const struct plugin_api rockbox_api = {
     sound_enum_hw_eq_band_setting,
 #endif
 #if defined (HAVE_PITCHCONTROL)
+    sound_get_pitch,
     sound_set_pitch,
 #endif
     &audio_master_sampr_list[0],
@@ -622,7 +627,10 @@ static const struct plugin_api rockbox_api = {
     dsp_eq_enable,
     dsp_dither_enable,
 #ifdef HAVE_PITCHCONTROL
+    dsp_get_timestretch,
     dsp_set_timestretch,
+    dsp_timestretch_enable,
+    dsp_timestretch_available,
 #endif
     dsp_configure,
     dsp_get_config,
@@ -641,6 +649,7 @@ static const struct plugin_api rockbox_api = {
     mixer_get_frequency,
 
     pcmbuf_fade,
+    pcmbuf_set_low_latency,
     system_sound_play,
     keyclick_click,
 
@@ -692,6 +701,9 @@ static const struct plugin_api rockbox_api = {
     audio_current_track,
     audio_flush_and_reload_tracks,
     audio_get_file_pos,
+#ifdef PLUGIN_USE_IRAM
+    audio_hard_stop,
+#endif
 
     /* menu */
     root_menu_get_options,
@@ -735,6 +747,7 @@ static const struct plugin_api rockbox_api = {
 #if (CONFIG_PLATFORM & PLATFORM_NATIVE)
     __errno,
 #endif
+    led,
     srand,
     rand,
     (void *)qsort,
@@ -780,7 +793,6 @@ static const struct plugin_api rockbox_api = {
     detect_flashed_ramimage,
     detect_flashed_romimage,
 #endif
-    led,
 
     /*plugin*/
     plugin_open,
@@ -789,14 +801,14 @@ static const struct plugin_api rockbox_api = {
     plugin_release_audio_buffer, /* defined in plugin.c */
     plugin_tsr,                  /* defined in plugin.c */
     plugin_get_current_filename,
-#ifdef PLUGIN_USE_IRAM
-    audio_hard_stop,
-#endif
-    crc_32r,
-
     /* new stuff at the end, sort into place next time
        the API gets incompatible */
-
+    warn_on_pl_erase,
+    playlist_insert_playlist,
+    battery_current,
+    onplay_show_playlist_menu,
+    queue_remove_from_head,
+    core_set_keyremap,
 };
 
 static int plugin_buffer_handle;
@@ -980,14 +992,11 @@ void* plugin_get_buffer(size_t *buffer_size)
  */
 static void* plugin_get_audio_buffer(size_t *buffer_size)
 {
-    /* dummy ops with no callbacks, needed because by
-     * default buflib buffers can be moved around which must be avoided */
-    static struct buflib_callbacks dummy_ops;
     if (plugin_buffer_handle <= 0)
     {
         plugin_buffer_handle = core_alloc_maximum("plugin audio buf",
                                                   &plugin_buffer_size,
-                                                  &dummy_ops);
+                                                  &buflib_ops_locked);
     }
 
     if (buffer_size)
@@ -1013,7 +1022,7 @@ static void plugin_tsr(bool (*exit_callback)(bool))
     pfn_tsr_exit = exit_callback; /* remember the callback for later */
 }
 
-int plugin_open(char *plugin, char *parameter)
+int plugin_open(const char *plugin, const char *parameter)
 {
     open_plugin_add_path(ID2P(LANG_OPEN_PLUGIN), plugin, parameter);
     return PLUGIN_GOTO_PLUGIN;

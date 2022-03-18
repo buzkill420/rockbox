@@ -39,6 +39,9 @@
 #include "option_select.h"
 #include "debug.h"
 #include "shortcuts.h"
+#ifdef HAVE_ALBUMART
+#include "playback.h"
+#endif
 
  /* 1 top, 1 bottom, 2 on either side, 1 for the icons
   * if enough space, top and bottom have 2 lines */
@@ -248,20 +251,21 @@ static void talk_qs_option(const struct settings_list *opt, bool enqueue)
 static bool gui_quickscreen_do_button(struct gui_quickscreen * qs, int button)
 {
     int item;
-    bool invert = false;
+    bool previous = false;
     switch(button)
     {
         case ACTION_QS_TOP:
-            invert = true;
             item = QUICKSCREEN_TOP;
             break;
+
         case ACTION_QS_LEFT:
-            invert = true;
             item = QUICKSCREEN_LEFT;
+            previous = true;
             break;
 
         case ACTION_QS_DOWN:
             item = QUICKSCREEN_BOTTOM;
+            previous = true;
             break;
 
         case ACTION_QS_RIGHT:
@@ -271,37 +275,48 @@ static bool gui_quickscreen_do_button(struct gui_quickscreen * qs, int button)
         default:
             return false;
     }
+
     if (qs->items[item] == NULL)
         return false;
-#ifdef ASCENDING_INT_SETTINGS
-    if (((qs->items[item]->flags & F_INT_SETTING) == F_INT_SETTING) &&
-        ( button == ACTION_QS_DOWN || button == ACTION_QS_TOP))
-    {
-        invert = !invert;
-    }
-#endif
-    option_select_next_val(qs->items[item], invert, true);
+
+    option_select_next_val(qs->items[item], previous, true);
     talk_qs_option(qs->items[item], false);
     return true;
 }
 
 #ifdef HAVE_TOUCHSCREEN
-static int quickscreen_touchscreen_button(const struct viewport
-                                                    vps[QUICKSCREEN_ITEM_COUNT])
+static int quickscreen_touchscreen_button(void)
 {
     short x,y;
-    /* only hitting the text counts, everything else is exit */
     if (action_get_touchscreen_press(&x, &y) != BUTTON_REL)
         return ACTION_NONE;
-    else if (viewport_point_within_vp(&vps[QUICKSCREEN_TOP], x, y))
+
+    enum { left=1, right=2, top=4, bottom=8 };
+
+    int bits = 0;
+
+    if(x < LCD_WIDTH/3)
+        bits |= left;
+    else if(x > 2*LCD_WIDTH/3)
+        bits |= right;
+
+    if(y < LCD_HEIGHT/3)
+        bits |= top;
+    else if(y > 2*LCD_HEIGHT/3)
+        bits |= bottom;
+
+    switch(bits) {
+    case top:
         return ACTION_QS_TOP;
-    else if (viewport_point_within_vp(&vps[QUICKSCREEN_BOTTOM], x, y))
+    case bottom:
         return ACTION_QS_DOWN;
-    else if (viewport_point_within_vp(&vps[QUICKSCREEN_LEFT], x, y))
+    case left:
         return ACTION_QS_LEFT;
-    else if (viewport_point_within_vp(&vps[QUICKSCREEN_RIGHT], x, y))
+    case right:
         return ACTION_QS_RIGHT;
-    return ACTION_STD_CANCEL;
+    default:
+        return ACTION_STD_CANCEL;
+    }
 }
 #endif
 
@@ -343,7 +358,7 @@ static bool gui_syncquickscreen_run(struct gui_quickscreen * qs, int button_ente
         button = get_action(CONTEXT_QUICKSCREEN, HZ/5);
 #ifdef HAVE_TOUCHSCREEN
         if (button == ACTION_TOUCHSCREEN)
-            button = quickscreen_touchscreen_button(vps[SCREEN_MAIN]);
+            button = quickscreen_touchscreen_button();
 #endif
         if (default_event_handler(button) == SYS_USB_CONNECTED)
         {
@@ -407,6 +422,9 @@ int quick_screen_quick(int button_enter)
     struct gui_quickscreen qs;
     bool oldshuffle = global_settings.playlist_shuffle;
     int oldrepeat = global_settings.repeat_mode;
+#ifdef HAVE_ALBUMART
+    int old_album_art = global_settings.album_art;
+#endif
     bool usb = false;
 
     if (global_settings.shortcuts_replaces_qs)
@@ -442,6 +460,10 @@ int quick_screen_quick(int button_enter)
             else
                 playlist_sort(NULL, true);
         }
+#ifdef HAVE_ALBUMART
+        if (old_album_art != global_settings.album_art)
+            set_albumart_mode(global_settings.album_art);
+#endif
     }
     return (usb ? 1:0);
 }

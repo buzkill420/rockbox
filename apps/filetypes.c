@@ -66,6 +66,7 @@ static const struct filetype inbuilt_filetypes[] = {
     { "m4b", FILE_ATTR_AUDIO, Icon_Audio, VOICE_EXT_MPA },
     { "mp4", FILE_ATTR_AUDIO, Icon_Audio, VOICE_EXT_MPA },
     { "mod", FILE_ATTR_AUDIO, Icon_Audio, VOICE_EXT_MPA },
+    { "mpga", FILE_ATTR_AUDIO, Icon_Audio, VOICE_EXT_MPA },
     { "shn", FILE_ATTR_AUDIO, Icon_Audio, VOICE_EXT_MPA },
     { "aif", FILE_ATTR_AUDIO, Icon_Audio, VOICE_EXT_MPA },
     { "aiff",FILE_ATTR_AUDIO, Icon_Audio, VOICE_EXT_MPA },
@@ -301,8 +302,8 @@ void read_viewer_theme_file(void)
     {
         custom_filetype_icons[i] = filetypes[i].icon;
     }
-    
-    snprintf(buffer, MAX_PATH, "%s/%s.icons", ICON_DIR, 
+
+    snprintf(buffer, MAX_PATH, "%s/%s.icons", ICON_DIR,
              global_settings.viewers_icon_file);
     fd = open(buffer, O_RDONLY);
     if (fd < 0)
@@ -531,17 +532,37 @@ int filetype_get_icon(int attr)
     return filetypes[index].icon;
 }
 
-char* filetype_get_plugin(const struct entry* file)
+char* filetype_get_plugin(const struct entry* file, char *buffer, size_t buffer_len)
 {
-    static char plugin_name[MAX_PATH];
     int index = find_attr(file->attr);
-    if (index < 0)
+    if (index < 0 || !buffer)
         return NULL;
-    if (filetypes[index].plugin == NULL)
+    struct file_type *ft_indexed = &filetypes[index];
+
+    /* attempt to find a suitable viewer by file extension */
+    if(ft_indexed->plugin == NULL && ft_indexed->extension != NULL)
+    {
+        struct file_type *ft;
+        int i = filetype_count;
+        while (--i > index)
+        {
+            ft = &filetypes[i];
+            if (ft->plugin == NULL || ft->extension == NULL)
+                continue;
+            else if (strcmp(ft->extension, ft_indexed->extension) == 0)
+            {
+                /*splashf(HZ*3, "Found %d %s %s", i, ft->extension, ft->plugin);*/
+                ft_indexed = ft;
+                break;
+            }
+        }
+    }
+    if (ft_indexed->plugin == NULL)
         return NULL;
-    snprintf(plugin_name, MAX_PATH, "%s/%s.%s", 
-             PLUGIN_DIR, filetypes[index].plugin, ROCK_EXTENSION);
-    return plugin_name;
+
+    snprintf(buffer, buffer_len, "%s/%s." ROCK_EXTENSION,
+             PLUGIN_DIR, ft_indexed->plugin);
+    return buffer;
 }
 
 bool filetype_supported(int attr)
@@ -574,39 +595,32 @@ static int openwith_get_talk(int selected_item, void * data)
 {
     (void)data;
     char viewer_filename[MAX_FILENAME];
-    snprintf(viewer_filename, MAX_FILENAME, "%s.%s",
-             filetypes[viewers[selected_item]].plugin, ROCK_EXTENSION);
+    snprintf(viewer_filename, MAX_FILENAME, "%s." ROCK_EXTENSION,
+             filetypes[viewers[selected_item]].plugin);
     talk_file_or_spell(PLUGIN_DIR, viewer_filename,
                        NULL, false);
     return 0;
 }
 
-static int openwith_action_callback(int action, struct gui_synclist *lists)
-{
-    struct cb_data *info = (struct cb_data *)lists->data;
-    int i;
-    if (action == ACTION_STD_OK)
-    {
-        char plugin[MAX_PATH];
-        i = viewers[gui_synclist_get_sel_pos(lists)];
-        snprintf(plugin, MAX_PATH, "%s/%s.%s",
-                    PLUGIN_DIR, filetypes[i].plugin, ROCK_EXTENSION);
-        plugin_load(plugin, info->current_file);
-        return ACTION_STD_CANCEL;
-    }
-    return action;
-}
-
 int filetype_list_viewers(const char* current_file)
 {
     struct simplelist_info info;
-    struct cb_data data = { current_file };
-    simplelist_info_init(&info, str(LANG_ONPLAY_OPEN_WITH), viewer_count, &data);
-    info.action_callback = openwith_action_callback;
+    simplelist_info_init(&info, str(LANG_ONPLAY_OPEN_WITH), viewer_count, NULL);
     info.get_name = openwith_get_name;
     info.get_icon = global_settings.show_icons?openwith_get_icon:NULL;
     info.get_talk = openwith_get_talk;
-    return simplelist_show_list(&info);
+
+    int ret = simplelist_show_list(&info);
+
+    if (info.selection >= 0) /* run user selected viewer */
+    {
+        char plugin[MAX_PATH];
+        int i = viewers[info.selection];
+        snprintf(plugin, MAX_PATH, "%s/%s." ROCK_EXTENSION,
+                    PLUGIN_DIR, filetypes[i].plugin);
+        plugin_load(plugin, current_file);
+    }
+    return ret;
 }
 
 int filetype_load_plugin(const char* plugin, const char* file)
@@ -631,7 +645,7 @@ int filetype_load_plugin(const char* plugin, const char* file)
     }
     if (i >= filetype_count)
         return PLUGIN_ERROR;
-    snprintf(plugin_name, MAX_PATH, "%s/%s.%s",
-             PLUGIN_DIR, filetypes[i].plugin, ROCK_EXTENSION);
+    snprintf(plugin_name, MAX_PATH, "%s/%s." ROCK_EXTENSION,
+             PLUGIN_DIR, filetypes[i].plugin);
     return plugin_load(plugin_name, file);
 }

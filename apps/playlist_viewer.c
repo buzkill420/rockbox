@@ -98,7 +98,7 @@ struct playlist_viewer {
     int selected_track;         /* The selected track, relative (first is 0) */
     int moving_track;           /* The track to move, relative (first is 0)
                                    or -1 if nothing is currently being moved */
-    int moving_playlist_index;  /* Playlist-relative index (as opposed to 
+    int moving_playlist_index;  /* Playlist-relative index (as opposed to
                                    viewer-relative index) of moving track    */
     struct playlist_buffer buffer;
 };
@@ -295,7 +295,7 @@ static struct playlist_entry * playlist_buffer_get_track(struct playlist_buffer 
            the name_buffer is probably too small to store enough
            titles to fill the screen, and preload data in the short
            direction.
-          
+
            If this happens then scrolling performance will probably
            be quite low, but it's better then having Data Abort errors */
         playlist_buffer_load_entries(pb, index, FORWARD);
@@ -319,7 +319,7 @@ static bool playlist_viewer_init(struct playlist_viewer * viewer,
     }
     if (!have_list && (playlist_amount() > 0))
     {
-         /*If dynamic playlist still exists, view it anyway even 
+         /*If dynamic playlist still exists, view it anyway even
         if playback has reached the end of the playlist */
         have_list = true;
     }
@@ -479,6 +479,31 @@ static bool update_playlist(bool force)
     return true;
 }
 
+static int show_track_info(struct playlist_entry *current_track)
+{
+    struct mp3entry id3;
+    bool id3_retrieval_successful = false;
+
+#if defined(HAVE_TC_RAMCACHE) && defined(HAVE_DIRCACHE)
+    if (tagcache_fill_tags(&id3, current_track->name))
+        id3_retrieval_successful = true;
+    else
+#endif
+    {
+        int fd = open(current_track->name, O_RDONLY);
+        if (fd >= 0)
+        {
+            if (get_metadata(&id3, fd, current_track->name))
+                id3_retrieval_successful = true;
+            close(fd);
+        }
+    }
+
+    return id3_retrieval_successful &&
+            browse_id3(&id3, current_track->index + 1,
+            viewer.num_tracks) ? -1 : 0;
+}
+
 /* Menu of playlist commands.  Invoked via ON+PLAY on main viewer screen.
    Returns -1 if USB attached, 0 if no playlist change, 1 if playlist
    changed, 2 if a track was removed from the playlist */
@@ -489,7 +514,8 @@ static int onplay_menu(int index)
         playlist_buffer_get_track(&viewer.buffer, index);
     MENUITEM_STRINGLIST(menu_items, ID2P(LANG_PLAYLIST), NULL,
                         ID2P(LANG_CURRENT_PLAYLIST), ID2P(LANG_CATALOG),
-                        ID2P(LANG_REMOVE), ID2P(LANG_MOVE), ID2P(LANG_SHUFFLE),
+                        ID2P(LANG_REMOVE), ID2P(LANG_MOVE), ID2P(LANG_MENU_SHOW_ID3_INFO),
+                        ID2P(LANG_SHUFFLE),
                         ID2P(LANG_SAVE),
                         ID2P(LANG_PLAYLISTVIEWER_SETTINGS));
     bool current = (current_track->index == viewer.current_playing_track);
@@ -509,7 +535,7 @@ static int onplay_menu(int index)
         {
             case 0:
                 /* playlist */
-                onplay_show_playlist_menu(current_track->name);
+                onplay_show_playlist_menu(current_track->name, NULL);
                 ret = 0;
                 break;
             case 1:
@@ -547,16 +573,19 @@ static int onplay_menu(int index)
                 ret = 0;
                 break;
             case 4:
+                ret = show_track_info(current_track);
+                break;
+            case 5:
                 /* shuffle */
                 playlist_randomise(viewer.playlist, current_tick, false);
                 ret = 1;
                 break;
-            case 5:
+            case 6:
                 /* save playlist */
                 save_playlist_screen(viewer.playlist);
                 ret = 0;
                 break;
-            case 6:
+            case 7:
                 /* playlist viewer settings */
                 result = do_menu(&viewer_settings_menu, NULL, NULL, false);
                 ret = (result == MENU_ATTACHED_USB) ? -1 : 0;
@@ -797,6 +826,7 @@ enum playlist_viewer_result playlist_viewer_ex(const char* filename)
                     int start_index = current_track->index;
                     if (!warn_on_pl_erase())
                     {
+                        gui_synclist_set_title(&playlist_lists, playlist_lists.title, playlist_lists.title_icon);
                         gui_synclist_draw(&playlist_lists);
                         break;
                     }
@@ -846,6 +876,7 @@ enum playlist_viewer_result playlist_viewer_ex(const char* filename)
                 gui_synclist_set_icon_callback(&playlist_lists,
                               global_settings.playlist_viewer_icons?
                               &playlist_callback_icons:NULL);
+                gui_synclist_set_title(&playlist_lists, playlist_lists.title, playlist_lists.title_icon);
                 gui_synclist_draw(&playlist_lists);
                 gui_synclist_speak_item(&playlist_lists);
                 break;

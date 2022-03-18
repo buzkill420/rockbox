@@ -1188,17 +1188,44 @@ int talk_number(long n, bool enqueue)
                 talk_id(VOICE_HUNDRED, true);
             }
 
-            /* combination indexing */
-            if (ones > 20)
+            struct queue_entry tens_swap;
+            if (get_clip(VOICE_NUMERIC_TENS_SWAP_SEPARATOR, &tens_swap) >= 0)
             {
-               int tens = ones/10 + 18;
-               talk_id(VOICE_ZERO + tens, true);
-               ones %= 10;
+                /* direct indexing */
+                if (ones <= 20)
+                {
+                    talk_id(VOICE_ZERO + ones, true);
+                }
+                else if (ones)
+                {
+                    int tmp = ones % 10;
+                    if (tmp)
+                    {
+                        talk_id(VOICE_ZERO + tmp, true);
+                        talk_id(VOICE_NUMERIC_TENS_SWAP_SEPARATOR, true);
+                    }
+                }
+                /* combination indexing */
+                if (ones > 20)
+                {
+                     int tens = ones/10 + 18;
+                     talk_id(VOICE_ZERO + tens, true);
+                }
             }
+            else
+            {
+                /* combination indexing */
+                if (ones > 20)
+                {
+                    int tens = ones/10 + 18;
+                    talk_id(VOICE_ZERO + tens, true);
+                    ones %= 10;
+                }
 
-            /* direct indexing */
-            if (ones)
-                talk_id(VOICE_ZERO + ones, true);
+                /* direct indexing */
+                if (ones)
+                    talk_id(VOICE_ZERO + ones, true);
+            }
 
             /* add billion, million, thousand */
             if (mil)
@@ -1215,7 +1242,7 @@ int talk_number(long n, bool enqueue)
 static int talk_year(long year, bool enqueue)
 {
     int rem;
-    if(year < 1100 || year >=2000)
+    if(year < 1100 || (year >=2000 && year < 2100))
         /* just say it as a regular number */
         return talk_number(year, enqueue);
     /* Say century */
@@ -1469,9 +1496,30 @@ void talk_setting(const void *global_settings_variable)
 
 void talk_date(const struct tm *tm, bool enqueue)
 {
-    talk_id(LANG_MONTH_JANUARY + tm->tm_mon, enqueue);
-    talk_number(tm->tm_mday, true);
-    talk_number(1900 + tm->tm_year, true);
+    const char *format = str(LANG_VOICED_DATE_FORMAT);
+    const char *ptr;
+
+    if (!enqueue)
+        talk_shutup(); /* cut off all the pending stuff */
+
+    for (ptr = format ; *ptr ; ptr++) {
+        switch(*ptr) {
+	case 'Y':
+            talk_number(1900 + tm->tm_year, true);
+            break;
+	case 'A':
+            talk_id(LANG_MONTH_JANUARY + tm->tm_mon, true);
+            break;
+	case 'm':
+            talk_number(tm->tm_mon + 1, true);
+            break;
+	case 'd':
+            talk_number(tm->tm_mday, true);
+            break;
+        default:
+            break;
+        }
+    }
 }
 
 void talk_time(const struct tm *tm, bool enqueue)

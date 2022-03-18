@@ -436,6 +436,7 @@ int ft_enter(struct tree_context* c)
 {
     int rc = GO_TO_PREVIOUS;
     char buf[MAX_PATH];
+
     struct entry* file = tree_get_entry_at(c, c->selected_item);
     if (!file)
     {
@@ -628,32 +629,21 @@ int ft_enter(struct tree_context* c)
                 rolo_load(buf);
                 break;
 #endif
+            case FILE_ATTR_CUE:
+                display_cuesheet_content(buf);
+                break;
 
                 /* plugin file */
             case FILE_ATTR_ROCK:
-            case FILE_ATTR_LUA:
-            case FILE_ATTR_OPX:
             {
-                char *plugin = buf, *argument = NULL, lua_path[MAX_PATH];
-                int ret;
-
-                if ((file_attr & FILE_ATTR_MASK) == FILE_ATTR_LUA) {
-                    snprintf(lua_path, sizeof(lua_path)-1, "%s/lua.rock", VIEWERS_DIR); /* Use a #define here ? */
-                    plugin = lua_path;
-                    argument = buf;
-                }
-                else if ((file_attr & FILE_ATTR_MASK) == FILE_ATTR_OPX) {
-                    snprintf(lua_path, sizeof(lua_path)-1, "%s/open_plugins.rock", VIEWERS_DIR); /* Use a #define here ? */
-                    plugin = lua_path;
-                    argument = buf;
-                }
-
+                char *plugin = buf, *argument = NULL;
                 if (global_settings.party_mode && audio_status()) {
                     splash(HZ, ID2P(LANG_PARTY_MODE));
                     break;
                 }
-                ret = plugin_load(plugin, argument);
-                switch (ret)
+
+#ifdef PLUGINS_RUN_IN_BROWSER /* Stay in the filetree to run a plugin */
+                switch (plugin_load(plugin, argument))
                 {
                     case PLUGIN_GOTO_WPS:
                         play = true;
@@ -676,16 +666,18 @@ int ft_enter(struct tree_context* c)
                     default:
                         break;
                 }
+#else /* Exit the filetree to run a plugin */
+                plugin_open(plugin, argument);
+                rc = GO_TO_PLUGIN;
+#endif
                 break;
             }
-            case FILE_ATTR_CUE:
-                display_cuesheet_content(buf);
-                break;
 
             default:
             {
                 const char* plugin;
-
+                char plugin_path[MAX_PATH];
+                const char *argument = buf;
                 if (global_settings.party_mode && audio_status()) {
                     splash(HZ, ID2P(LANG_PARTY_MODE));
                     break;
@@ -698,10 +690,11 @@ int ft_enter(struct tree_context* c)
                     return rc;
                 }
 
-                plugin = filetype_get_plugin(file);
+                plugin = filetype_get_plugin(file, plugin_path, sizeof(plugin_path));
                 if (plugin)
                 {
-                    switch (plugin_load(plugin,buf))
+#ifdef PLUGINS_RUN_IN_BROWSER /* Stay in the filetree to run a plugin */
+                    switch (plugin_load(plugin, argument))
                     {
                         case PLUGIN_USB_CONNECTED:
                             rc = GO_TO_FILEBROWSER;
@@ -719,6 +712,10 @@ int ft_enter(struct tree_context* c)
                         default:
                             break;
                     }
+#else /* Exit the filetree to run a plugin */
+                    plugin_open(plugin, argument);
+                    rc = GO_TO_PLUGIN;
+#endif
                 }
                 break;
             }

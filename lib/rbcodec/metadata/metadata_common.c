@@ -252,6 +252,26 @@ bool skip_id3v2(int fd, struct mp3entry *id3)
     return success;
 }
 
+#if !defined(ROCKBOX) || defined(WARBLE) /*codecs can be built without rockbox */
+/* returns match index from option list
+ * returns -1 if option was not found
+ * option list is array of char pointers with the final item set to null
+ * ex - const char *option[] = { "op_a", "op_b", "op_c", NULL}
+ */
+int string_option(const char *option, const char *const oplist[], bool ignore_case)
+{
+    const char *op;
+    int (*cmp_fn)(const char*, const char*) = &strcasecmp;
+    if (!ignore_case)
+        cmp_fn = strcmp;
+    for (int i=0; (op=oplist[i]) != NULL; i++)
+    {
+        if (cmp_fn(op, option) == 0)
+            return i;
+    }
+    return -1;
+}
+#endif
 /* Parse the tag (the name-value pair) and fill id3 and buffer accordingly.
  * String values to keep are written to buf. Returns number of bytes written
  * to buf (including end nil).
@@ -262,19 +282,44 @@ long parse_tag(const char* name, char* value, struct mp3entry* id3,
     long len = 0;
     char** p;
 
-    if ((((strcasecmp(name, "track") == 0) && (type == TAGTYPE_APE)))
-        || ((strcasecmp(name, "tracknumber") == 0) && (type == TAGTYPE_VORBIS)))
+    enum
+    {
+        eTRACK = 0, eTRACKNUMBER, eDISCNUMBER, eDISC,
+        eYEAR, eDATE, eTITLE, eARTIST, eALBUM, eGENRE,
+        eCOMPOSER, eCOMMENT, eALBUMARTIST, eALBUM_ARTIST,
+        eENSEMBLE, eGROUPING, eCONTENTGROUP, eCONTENT_GROUP,
+        eMUSICBRAINZ1, eMUSICBRAINZ2, e_COUNT_TAG_COUNT
+    };
+
+    static const char *tagops[e_COUNT_TAG_COUNT + 1] =
+    { [eTRACK] = "track", [eTRACKNUMBER] = "tracknumber",
+      [eDISCNUMBER] = "discnumber", [eDISC] = "disc",
+      [eYEAR] = "year", [eDATE] = "date", [eTITLE] = "title",
+      [eARTIST] = "artist", [eALBUM] = "album", [eGENRE] = "genre",
+      [eCOMPOSER] = "composer", [eCOMMENT] = "comment",
+      [eALBUMARTIST] = "albumartist", [eALBUM_ARTIST] ="album artist",
+      [eENSEMBLE] = "ensemble", [eGROUPING] = "grouping",
+      [eCONTENTGROUP] = "contentgroup", [eCONTENT_GROUP] = "content group",
+      [eMUSICBRAINZ1] = "musicbrainz_trackid",
+      [eMUSICBRAINZ2] = "http://musicbrainz.org",
+      [e_COUNT_TAG_COUNT] = NULL
+    };
+
+    int item = string_option(name, tagops, true);
+
+    if (((item == eTRACK && (type == TAGTYPE_APE)))
+        || (item == eTRACKNUMBER && (type == TAGTYPE_VORBIS)))
     {
         id3->tracknum = atoi(value);
         p = &(id3->track_string);
     }
-    else if (strcasecmp(name, "discnumber") == 0 || strcasecmp(name, "disc") == 0)
+    else if (item == eDISCNUMBER || item == eDISC)
     {
         id3->discnum = atoi(value);
         p = &(id3->disc_string);
     }
-    else if (((strcasecmp(name, "year") == 0) && (type == TAGTYPE_APE))
-        || ((strcasecmp(name, "date") == 0) && (type == TAGTYPE_VORBIS)))
+    else if ((item == eYEAR && (type == TAGTYPE_APE))
+        || (item == eDATE && (type == TAGTYPE_VORBIS)))
     {
         /* Date's can be in any format in Vorbis. However most of them
          * are in ISO8601 format so if we try and parse the first part
@@ -288,56 +333,39 @@ long parse_tag(const char* name, char* value, struct mp3entry* id3,
         }
         p = &(id3->year_string);
     }
-    else if (strcasecmp(name, "title") == 0)
+    else if (item == eTITLE)
     {
         p = &(id3->title);
     }
-    else if (strcasecmp(name, "artist") == 0)
+    else if (item == eARTIST)
     {
         p = &(id3->artist);
     }
-    else if (strcasecmp(name, "album") == 0)
+    else if (item == eALBUM)
     {
         p = &(id3->album);
     }
-    else if (strcasecmp(name, "genre") == 0)
+    else if (item == eGENRE)
     {
         p = &(id3->genre_string);
     }
-    else if (strcasecmp(name, "composer") == 0)
+    else if (item == eCOMPOSER)
     {
         p = &(id3->composer);
     }
-    else if (strcasecmp(name, "comment") == 0)
+    else if (item == eCOMMENT)
     {
         p = &(id3->comment);
     }
-    else if (strcasecmp(name, "albumartist") == 0)
+    else if (item == eALBUMARTIST || item == eALBUM_ARTIST || item == eENSEMBLE)
     {
         p = &(id3->albumartist);
     }
-    else if (strcasecmp(name, "album artist") == 0)
-    {
-        p = &(id3->albumartist);
-    }
-    else if (strcasecmp(name, "ensemble") == 0)
-    {
-        p = &(id3->albumartist);
-    }
-    else if (strcasecmp(name, "grouping") == 0)
+    else if (item == eGROUPING || item == eCONTENTGROUP || item == eCONTENT_GROUP)
     {
         p = &(id3->grouping);
     }
-    else if (strcasecmp(name, "content group") == 0)
-    {
-        p = &(id3->grouping);
-    }
-    else if (strcasecmp(name, "contentgroup") == 0)
-    {
-        p = &(id3->grouping);
-    }
-    else if (strcasecmp(name, "musicbrainz_trackid") == 0
-        || strcasecmp(name, "http://musicbrainz.org") == 0 )
+    else if (item == eMUSICBRAINZ1 || item == eMUSICBRAINZ2)
     {
         p = &(id3->mb_track_id);
     }

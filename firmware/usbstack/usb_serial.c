@@ -174,7 +174,13 @@ static struct usb_endpoint_descriptor
     .bInterval        = 0
 };
 
-static struct cdc_line_coding line_coding;
+union line_coding_buffer
+{
+    struct cdc_line_coding data;
+    unsigned char raw[64];
+};
+
+static union line_coding_buffer line_coding USB_DEVBSS_ATTR;
 
 /* send_buffer: local ring buffer.
  * transit_buffer: used to store aligned data that will be sent by the USB
@@ -184,10 +190,11 @@ static struct cdc_line_coding line_coding;
  */
 #define BUFFER_SIZE 512
 #define TRANSIT_BUFFER_SIZE 32
+#define RECV_BUFFER_SIZE 32
 static unsigned char send_buffer[BUFFER_SIZE];
 static unsigned char transit_buffer[TRANSIT_BUFFER_SIZE]
     USB_DEVBSS_ATTR __attribute__((aligned(4)));
-static unsigned char receive_buffer[32]
+static unsigned char receive_buffer[512]
     USB_DEVBSS_ATTR __attribute__((aligned(32)));
 
 static void sendout(void);
@@ -277,11 +284,13 @@ int usb_serial_get_config_descriptor(unsigned char *dest, int max_packet_size)
 }
 
 /* called by usb_core_control_request() */
-bool usb_serial_control_request(struct usb_ctrlrequest* req, unsigned char* dest)
+bool usb_serial_control_request(struct usb_ctrlrequest* req, void* reqdata, unsigned char* dest)
 {
     bool handled = false;
 
     (void)dest;
+    (void)reqdata;
+
     if (req->wIndex != control_interface)
     {
         return false;
@@ -291,11 +300,19 @@ bool usb_serial_control_request(struct usb_ctrlrequest* req, unsigned char* dest
     {
         if (req->bRequest == SET_LINE_CODING)
         {
-            if (req->wLength == sizeof(line_coding))
+            if (req->wLength == sizeof(struct cdc_line_coding))
             {
                 /* Receive line coding into local copy */
-                usb_drv_recv(EP_CONTROL, &line_coding, sizeof(line_coding));
-                usb_drv_send(EP_CONTROL, NULL, 0); /* ack */
+                if (!reqdata)
+                {
+                    usb_drv_control_response(USB_CONTROL_RECEIVE, line_coding.raw,
+                                             sizeof(struct cdc_line_coding));
+                }
+                else
+                {
+                    usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
+                }
+
                 handled = true;
             }
         }
@@ -304,7 +321,7 @@ bool usb_serial_control_request(struct usb_ctrlrequest* req, unsigned char* dest
             if (req->wLength == 0)
             {
                 /* wValue holds Control Signal Bitmap that is simply ignored here */
-                usb_drv_send(EP_CONTROL, NULL, 0); /* ack */
+                usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
                 handled = true;
             }
         }
@@ -313,11 +330,11 @@ bool usb_serial_control_request(struct usb_ctrlrequest* req, unsigned char* dest
     {
         if (req->bRequest == GET_LINE_CODING)
         {
-            if (req->wLength == sizeof(line_coding))
+            if (req->wLength == sizeof(struct cdc_line_coding))
             {
                 /* Send back line coding so host is happy */
-                usb_drv_recv(EP_CONTROL, NULL, 0); /* ack */
-                usb_drv_send(EP_CONTROL, &line_coding, sizeof(line_coding));
+                usb_drv_control_response(USB_CONTROL_ACK, line_coding.raw,
+                                         sizeof(struct cdc_line_coding));
                 handled = true;
             }
         }
@@ -329,7 +346,7 @@ bool usb_serial_control_request(struct usb_ctrlrequest* req, unsigned char* dest
 void usb_serial_init_connection(void)
 {
     /* prime rx endpoint */
-    usb_drv_recv(ep_out, receive_buffer, sizeof receive_buffer);
+    usb_drv_recv_nonblocking(ep_out, receive_buffer, RECV_BUFFER_SIZE);
 
     /* we come here too after a bus reset, so reset some data */
     buffer_transitlength = 0;
@@ -420,7 +437,7 @@ void usb_serial_transfer_complete(int ep,int dir, int status, int length)
             /* Data received. TODO : Do something with it ? */
 
             /* Get the next bit */
-            usb_drv_recv(ep_out, receive_buffer, sizeof receive_buffer);
+            usb_drv_recv_nonblocking(ep_out, receive_buffer, RECV_BUFFER_SIZE);
             break;
 
         case USB_DIR_IN:

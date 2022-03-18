@@ -83,11 +83,11 @@ void ak4376_open(void)
     ak4376_set_pdn_pin(1);
     mdelay(1);
 
-    static const int init_config[] = {
+    static const uint8_t init_config[] = {
         /* Ensure HPRHZ, HPLHZ are 0 */
         AK4376_REG_OUTPUT_MODE,  0x00,
         /* Mute all volume controls */
-        AK4376_REG_MIXER,        0x00,
+        AK4376_REG_MIXER,        AK4376_MIX_LCH | (AK4376_MIX_RCH << 4),
         AK4376_REG_LCH_VOLUME,   0x80,
         AK4376_REG_RCH_VOLUME,   0x00,
         AK4376_REG_AMP_VOLUME,   0x00,
@@ -150,14 +150,9 @@ static int round_step_up(int x, int step)
     return x - rem;
 }
 
-static void calc_volumes(int vol, int* mix, int* dig, int* sw)
+static void calc_volumes(int vol, int* dig, int* sw)
 {
-    /* Mixer can divide by 2, which gives an extra -6 dB adjustment */
-    if(vol < AK4376_DIG_VOLUME_MIN) {
-        *mix |= AK4376_MIX_HALF;
-        vol += 60;
-    }
-
+    /* Apply digital volume */
     *dig = round_step_up(vol, AK4376_DIG_VOLUME_STEP);
     *dig = MIN(*dig, AK4376_DIG_VOLUME_MAX);
     *dig = MAX(*dig, AK4376_DIG_VOLUME_MIN);
@@ -186,8 +181,8 @@ static int amp_vol_to_hw(int vol)
 void ak4376_set_volume(int vol_l, int vol_r)
 {
     int amp;
-    int mix_l = AK4376_MIX_LCH, dig_l, sw_l;
-    int mix_r = AK4376_MIX_RCH, dig_r, sw_r;
+    int dig_l, sw_l;
+    int dig_r, sw_r;
 
     if(vol_l <= AK4376_MIN_VOLUME && vol_r <= AK4376_MIN_VOLUME) {
         /* Special case for full mute */
@@ -202,11 +197,10 @@ void ak4376_set_volume(int vol_l, int vol_r)
         amp = MAX(amp, AK4376_AMP_VOLUME_MIN);
 
         /* Other controls are stereo */
-        calc_volumes(vol_l - amp, &mix_l, &dig_l, &sw_l);
-        calc_volumes(vol_r - amp, &mix_r, &dig_r, &sw_r);
+        calc_volumes(vol_l - amp, &dig_l, &sw_l);
+        calc_volumes(vol_r - amp, &dig_r, &sw_r);
     }
 
-    ak4376_write(AK4376_REG_MIXER, (mix_l & 0xf) | ((mix_r & 0xf) << 4));
     ak4376_write(AK4376_REG_LCH_VOLUME, dig_vol_to_hw(dig_l) | (1 << 7));
     ak4376_write(AK4376_REG_RCH_VOLUME, dig_vol_to_hw(dig_r));
     ak4376_write(AK4376_REG_AMP_VOLUME, amp_vol_to_hw(amp));
@@ -248,11 +242,29 @@ void ak4376_set_freqmode(int fsel, int mult, int power_mode)
 
     /* Handle the DSMLP bit in the MODE_CTRL register */
     int mode_ctrl = 0x00;
-    if(power_mode || hw_freq_sampr[fsel] <= SAMPR_12)
+    if(power_mode == SOUND_LOW_POWER || hw_freq_sampr[fsel] <= SAMPR_12)
         mode_ctrl |= 0x40;
 
+    /* Handle the LPMODE bit */
+    int pwr3 = power_mode == SOUND_LOW_POWER ? 0x11 : 0x01;
+
+    /* The datasheet says the HP amp must be powered down before changing
+     * the operating mode of the DAC or HP amp. I'm assuming this means
+     * the amp must be shut down when changing DSMLP or LPMODE. */
+    int cur_mode_ctrl = ak4376_read(AK4376_REG_MODE_CTRL);
+    int cur_pwr3 = ak4376_read(AK4376_REG_PWR3);
+    bool disable_amp = mode_ctrl != cur_mode_ctrl || pwr3 != cur_pwr3;
+
     /* Program the new settings */
+    if(disable_amp)
+        ak4376_write(AK4376_REG_PWR4, 0x00);
+
     ak4376_write(AK4376_REG_CLOCK_MODE, clock_mode);
     ak4376_write(AK4376_REG_MODE_CTRL, mode_ctrl);
-    ak4376_write(AK4376_REG_PWR3, power_mode ? 0x11 : 0x01);
+    ak4376_write(AK4376_REG_PWR3, pwr3);
+
+    if(disable_amp) {
+        ak4376_write(AK4376_REG_PWR4, 0x03);
+        mdelay(26);
+    }
 }

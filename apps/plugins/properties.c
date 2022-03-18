@@ -33,9 +33,18 @@ char str_date[64];
 char str_time[64];
 
 char str_title[MAX_PATH];
+char str_composer[MAX_PATH];
 char str_artist[MAX_PATH];
+char str_albumartist[MAX_PATH];
 char str_album[MAX_PATH];
+char str_genre[MAX_PATH];
+char str_comment[MAX_PATH];
+char str_year[MAX_PATH];
+char str_discnum[MAX_PATH];
+char str_tracknum[MAX_PATH];
 char str_duration[32];
+char str_bitrate[32];
+char str_frequency[32];
 
 unsigned nseconds;
 unsigned long nsize;
@@ -51,10 +60,19 @@ static const unsigned char* const props_file[] =
     ID2P(LANG_PROPERTIES_SIZE),       str_size,
     ID2P(LANG_PROPERTIES_DATE),       str_date,
     ID2P(LANG_PROPERTIES_TIME),       str_time,
+    ID2P(LANG_PROPERTIES_COMPOSER),   str_composer,
     ID2P(LANG_PROPERTIES_ARTIST),     str_artist,
+    ID2P(LANG_PROPERTIES_ALBUMARTIST),     str_albumartist,
     ID2P(LANG_PROPERTIES_TITLE),      str_title,
     ID2P(LANG_PROPERTIES_ALBUM),      str_album,
+    ID2P(LANG_PROPERTIES_GENRE),      str_genre,
+    ID2P(LANG_PROPERTIES_COMMENT),    str_comment,
+    ID2P(LANG_PROPERTIES_YEAR),       str_year,
+    ID2P(LANG_PROPERTIES_DISCNUM),    str_discnum,
+    ID2P(LANG_PROPERTIES_TRACKNUM),   str_tracknum,
     ID2P(LANG_PROPERTIES_DURATION),   str_duration,
+    ID2P(LANG_PROPERTIES_BITRATE),    str_bitrate,
+    ID2P(LANG_PROPERTIES_FREQUENCY),  str_frequency,
 };
 static const unsigned char* const props_dir[] =
 {
@@ -117,13 +135,56 @@ static bool file_properties(const char* selected_file)
                     rb->get_metadata(&id3, fd, selected_file))
                 {
                     long dur = id3.length / 1000;           /* seconds */
+                    rb->snprintf(str_composer, sizeof str_composer,
+                                 "%s", id3.composer ? id3.composer : "");
                     rb->snprintf(str_artist, sizeof str_artist,
                                  "%s", id3.artist ? id3.artist : "");
+                    rb->snprintf(str_albumartist, sizeof str_albumartist,
+                                 "%s", id3.albumartist ? id3.albumartist : "");
                     rb->snprintf(str_title, sizeof str_title,
                                  "%s", id3.title ? id3.title : "");
                     rb->snprintf(str_album, sizeof str_album,
                                  "%s", id3.album ? id3.album : "");
-                    num_properties += 3;
+                    rb->snprintf(str_genre, sizeof str_genre,
+                                 "%s", id3.genre_string ? id3.genre_string : "");
+                    rb->snprintf(str_comment, sizeof str_comment,
+                                 "%s", id3.comment ? id3.comment : "");
+
+                    if (id3.year_string)
+                        rb->snprintf(str_year, sizeof str_year,
+                                 "%s", id3.year_string);
+                    else if (id3.year)
+                        rb->snprintf(str_year, sizeof str_year,
+                                 "%d", id3.year);
+                    else
+                        rb->snprintf(str_year, sizeof str_year,
+                                 "%s", "");
+
+                    if (id3.disc_string)
+                        rb->snprintf(str_discnum, sizeof str_discnum,
+                                 "%s", id3.disc_string);
+                    else if (id3.discnum)
+                        rb->snprintf(str_discnum, sizeof str_discnum,
+                                 "%d", id3.discnum);
+                    else
+                        rb->snprintf(str_discnum, sizeof str_discnum,
+                                 "%s", "");
+
+                    if (id3.track_string)
+                        rb->snprintf(str_tracknum, sizeof str_tracknum,
+                                 "%s", id3.track_string);
+                    else if(id3.tracknum)
+                        rb->snprintf(str_tracknum, sizeof str_tracknum,
+                                 "%d", id3.tracknum);
+                    else
+                        rb->snprintf(str_tracknum, sizeof str_tracknum,
+                                 "%s", "");
+
+                    rb->snprintf(str_bitrate, sizeof str_bitrate,
+                                 "%d kbps", id3.bitrate ? : 0);
+                    rb->snprintf(str_frequency, sizeof str_frequency,
+                                 "%ld Hz", id3.frequency ? : 0);
+                    num_properties += 12;
 
                     if (dur > 0)
                     {
@@ -429,7 +490,7 @@ enum plugin_status plugin_start(const void* parameter)
     {
         button = rb->get_action(CONTEXT_LIST, HZ);
         /* HZ so the status bar redraws corectly */
-        if (rb->gui_synclist_do_button(&properties_lists,&button,LIST_WRAP_ON))
+        if (rb->gui_synclist_do_button(&properties_lists,&button,LIST_WRAP_UNLESS_HELD))
             continue;
         switch(button)
         {

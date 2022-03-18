@@ -664,10 +664,9 @@ void usb_hid_transfer_complete(int ep, int dir, int status, int length)
  * In order to allow sending info to the DAP, the Set Report mechanism can be
  * used by defining vendor specific output reports and send them from the host
  * to the DAP using the host's custom driver */
-static int usb_hid_set_report(struct usb_ctrlrequest *req)
+static int usb_hid_set_report(struct usb_ctrlrequest *req, void *reqdata)
 {
-    static unsigned char buf[SET_REPORT_BUF_LEN] USB_DEVBSS_ATTR
-        __attribute__((aligned(32)));
+    static unsigned char buf[64] USB_DEVBSS_ATTR __attribute__((aligned(32)));
     int length;
 
     if ((req->wValue >> 8) != REPORT_TYPE_OUTPUT)
@@ -692,8 +691,11 @@ static int usb_hid_set_report(struct usb_ctrlrequest *req)
         return 4;
     }
 
-    memset(buf, 0, length);
-    usb_drv_recv(EP_CONTROL, buf, length);
+    if(!reqdata) {
+        memset(buf, 0, length);
+        usb_drv_control_response(USB_CONTROL_RECEIVE, buf, length);
+        return 0;
+    }
 
 #ifdef LOGF_ENABLE
     if (buf[1] & 0x01)
@@ -710,10 +712,11 @@ static int usb_hid_set_report(struct usb_ctrlrequest *req)
 
     /* Defining other LEDs and setting them from the USB host (OS) can be used
      * to send messages to the DAP */
+    usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
     return 0;
 }
 
-static int usb_hid_get_report(struct usb_ctrlrequest *req, unsigned char** dest)
+static int usb_hid_get_report(struct usb_ctrlrequest *req, unsigned char* dest)
 {
     if ((req->wValue >> 8) != REPORT_TYPE_FEATURE)
     {
@@ -739,16 +742,17 @@ static int usb_hid_get_report(struct usb_ctrlrequest *req, unsigned char** dest)
         return 4;
     }
 
-    (*dest)[0] = 0;
-    (*dest)[1] = battery_level();
-    *dest += GET_REPORT_BUF_LEN;
-
+    dest[0] = 0;
+    dest[1] = battery_level();
+    usb_drv_control_response(USB_CONTROL_ACK, dest, 2);
     return 0;
 }
 
 /* called by usb_core_control_request() */
-bool usb_hid_control_request(struct usb_ctrlrequest *req, unsigned char *dest)
+bool usb_hid_control_request(struct usb_ctrlrequest *req, void *reqdata, unsigned char *dest)
 {
+    (void)reqdata;
+
     unsigned char *orig_dest = dest;
     switch (req->bRequestType & USB_TYPE_MASK)
     {
@@ -772,8 +776,7 @@ bool usb_hid_control_request(struct usb_ctrlrequest *req, unsigned char *dest)
 
         if (dest != orig_dest)
         {
-            usb_drv_recv(EP_CONTROL, NULL, 0); /* ack */
-            usb_drv_send(EP_CONTROL, orig_dest, dest - orig_dest);
+            usb_drv_control_response(USB_CONTROL_ACK, orig_dest, dest - orig_dest);
             return true;
         }
         break;
@@ -785,27 +788,26 @@ bool usb_hid_control_request(struct usb_ctrlrequest *req, unsigned char *dest)
             (req->bRequest == USB_HID_SET_IDLE) ? "set idle" :
             ((req->bRequest == USB_HID_SET_REPORT) ? "set report" :
             ((req->bRequest == USB_HID_GET_REPORT) ? "get report" : "")));
+
+        int rc;
         switch (req->bRequest)
         {
         case USB_HID_SET_REPORT:
-            if (usb_hid_set_report(req))
-                break;
+            rc = usb_hid_set_report(req, reqdata);
+            break;
         case USB_HID_GET_REPORT:
-            if (usb_hid_get_report(req, &dest))
-                break;
+            rc = usb_hid_get_report(req, dest);
+            break;
         case USB_HID_SET_IDLE:
-            if (dest != orig_dest)
-            {
-                usb_drv_recv(EP_CONTROL, NULL, 0); /* ack */
-                usb_drv_send(EP_CONTROL, orig_dest, dest - orig_dest);
-            }
-            else
-            {
-                usb_drv_send(EP_CONTROL, NULL, 0); /* ack */
-            }
+            usb_drv_control_response(USB_CONTROL_ACK, NULL, 0);
             return true;
+        default:
+            /* all other requests are errors */
+            return false;
         }
-        break;
+
+        if(rc == 0)
+            return true;
     }
 
     case USB_TYPE_VENDOR:

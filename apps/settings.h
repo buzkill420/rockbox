@@ -108,12 +108,33 @@ enum
     NUM_REPEAT_MODES
 };
 
+/* single mode options */
+enum {
+    SINGLE_MODE_OFF = 0,
+    SINGLE_MODE_TRACK,
+    SINGLE_MODE_ALBUM,
+    SINGLE_MODE_ALBUM_ARTIST,
+    SINGLE_MODE_ARTIST,
+    SINGLE_MODE_COMPOSER,
+    SINGLE_MODE_GROUPING,
+    SINGLE_MODE_GENRE
+};
+
 enum
 {
     QUEUE_HIDE = 0,
     QUEUE_SHOW_AT_TOPLEVEL,
     QUEUE_SHOW_IN_SUBMENU
 };
+
+#ifdef HAVE_ALBUMART
+enum
+{
+    AA_OFF = 0,
+    AA_PREFER_EMBEDDED,
+    AA_PREFER_IMAGE_FILE
+};
+#endif
 
 /* dir filter options */
 /* Note: Any new filter modes need to be added before NUM_FILTER_MODES.
@@ -437,6 +458,9 @@ struct user_settings
     unsigned char rfms_file[MAX_FILENAME+1];  /* last remote-fms */
 #endif
 #endif /* CONFIG_TUNER */
+#if defined(HAVE_RDS_CAP) && defined(CONFIG_RTC)
+    bool sync_rds_time; /* use RDS time to set the clock */
+#endif
 
     /* misc options */
 #ifndef HAVE_WHEEL_ACCELERATION
@@ -476,6 +500,8 @@ struct user_settings
     int default_codepage;   /* set default codepage for tag conversion */
     bool hold_lr_for_scroll_in_list; /* hold L/R scrolls the list left/right */
     bool play_selected; /* Plays selected file even in shuffle mode */
+    int single_mode;    /* single mode - stop after every track, album, album artist,
+                           artist, composer, work, or genre */
     bool party_mode;    /* party mode - unstoppable music */
     bool audioscrobbler; /* Audioscrobbler logging  */
     bool cuesheet;
@@ -529,6 +555,8 @@ struct user_settings
     bool browse_current; /* 1=goto current song,
                             0=goto previous location */
     bool scroll_paginated; /* 0=dont 1=do */
+    bool list_wraparound;  /* wrap around to opposite end of list when scrolling */
+    int  list_order;       /* order for numeric lists (ascending or descending) */
     int  scroll_speed;     /* long texts scrolling speed: 1-30 */
     int  bidir_limit;      /* bidir scroll length limit */
     int  scroll_delay;     /* delay (in 1/10s) before starting scroll */
@@ -582,7 +610,10 @@ struct user_settings
     bool warnon_erase_dynplaylist; /* warn when erasing dynamic playlist */
     bool show_shuffled_adding_options; /* whether to display options for adding shuffled tracks to dynamic playlist */
     int show_queue_options; /* how and whether to display options to queue tracks */
-
+#ifdef HAVE_ALBUMART
+    int album_art; /* switch off album art display or choose preferred source */
+#endif
+    
     /* playlist viewer settings */
     bool playlist_viewer_icons; /* display icons on viewer */
     bool playlist_viewer_indices; /* display playlist indices on viewer */
@@ -606,10 +637,9 @@ struct user_settings
 
     /* power settings */
     int poweroff;   /* idle power off timer */
-#if BATTERY_CAPACITY_DEFAULT > 0
+#if BATTERY_CAPACITY_INC > 0
     int battery_capacity; /* in mAh */
 #endif
-
 #if BATTERY_TYPES_COUNT > 1
     int battery_type;  /* for units which can take multiple types (Ondio). */
 #endif
@@ -759,6 +789,9 @@ struct user_settings
     int sleeptimer_duration; /* In minutes; 0=off */
     bool sleeptimer_on_startup;
     bool keypress_restarts_sleeptimer;
+
+    bool show_shutdown_message; /* toggle whether display lights up and displays message
+                                when shutting down */
 
 #ifdef HAVE_MORSE_INPUT
     bool morse_input; /* text input method setting */

@@ -87,7 +87,6 @@ static const struct button_mapping button_context_settings[] = {
     { ACTION_SETTINGS_INCBIGSTEP, BUTTON_VOL_UP,                 BUTTON_NONE },
     { ACTION_SETTINGS_DEC,       BUTTON_SCROLL_BACK,             BUTTON_NONE },
     { ACTION_SETTINGS_DECBIGSTEP, BUTTON_VOL_DOWN,               BUTTON_NONE },
-    { ACTION_SETTINGS_RESET,     BUTTON_PLAY|BUTTON_REPEAT,      BUTTON_PLAY },
     LAST_ITEM_IN_LIST__NEXTLIST(CONTEXT_STD),
 }; /* button_context_settings */
 
@@ -212,7 +211,8 @@ const struct button_mapping* get_context_mapping(int context)
             return button_context_list;
 
         case CONTEXT_SETTINGS:
-	case CONTEXT_SETTINGS_EQ:
+        case CONTEXT_SETTINGS_EQ:
+        case CONTEXT_SETTINGS_COLOURCHOOSER:
             return button_context_settings;
 
         case CONTEXT_SETTINGS_TIME:

@@ -107,8 +107,8 @@ file find the instructions on the Rockbox website:
   \config{folder, m3u, m3u8, cfg, wps, lng, rock, bmark, cue, colours, mpa,
   \firmwareextension{}, %
   mp1, mp2, mp3, ogg, oga, wma, wmv, asf, wav, flac, ac3, a52, mpc, wv,
-  m4a, m4b, mp4, mod, shn, aif, aiff, spx, sid, adx, nsf, nsfe, spc, ape,
-  mac, sap, mpg, mpeg%
+  m4a, m4b, mp4, mp4a, mod, shn, aif, aiff, spx, sid, adx, nsf, nsfe, spc,
+  ape, mac, sap, mpg, mpeg%
   \opt{HAVE_REMOTE_LCD}{, rwps}%
   \opt{lcd_non-mono}{, bmp}%
   \opt{radio}{, fmr}%
@@ -193,6 +193,8 @@ viewport. This is done by adding the following line to the
   \opt{lcd_color}{
     \config{remote ui viewport: X,Y,[width],[height],[font],[fgcolour],[bgcolour]}}
 \\*
+
+}
 
   Only the first two parameters \emph{have} to be specified, the others can
   be omitted using `$-$' as a placeholder. The syntax is very similar to WPS
@@ -378,8 +380,6 @@ and the WPS, but you can use multiple fonts in each of the individual screens.\\
   \end{itemize}
 
   An example would be: \config{\%Fl(2,12-Nimbus.fnt,100)}
-
-}
 
 \subsubsection{Conditional Tags}
 

@@ -22,6 +22,11 @@
 #ifndef _USB_CLASS_DRIVER_H_
 #define _USB_CLASS_DRIVER_H_
 
+#include "usb_ch9.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <string.h>
+
 /* Common api, implemented by all class drivers */
 
 struct usb_class_driver {
@@ -75,7 +80,7 @@ struct usb_class_driver {
        able to handle it, it should ack the request, and return true. Otherwise
        it should return false.
        Optional function */
-    bool (*control_request)(struct usb_ctrlrequest* req, unsigned char *dest);
+    bool (*control_request)(struct usb_ctrlrequest* req, void* reqdata, unsigned char *dest);
 
 #ifdef HAVE_HOTSWAP
     /* Tells the driver that a hotswappable disk/card was inserted or

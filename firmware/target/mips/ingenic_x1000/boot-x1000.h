@@ -24,6 +24,8 @@
 
 #include "x1000/cpm.h"
 #include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
 
 enum {
     BOOT_OPTION_ROCKBOX = 0,
@@ -42,6 +44,18 @@ enum {
     /* Set by the SPL if it was loaded over USB boot */
     BOOT_FLAG_USB_BOOT = (1 << 30),
 };
+
+void x1000_boot_rockbox(const void* source, size_t length)
+    __attribute__((section(".icode")));
+void x1000_boot_linux(const void* source, size_t length,
+                      void* load, void* entry, const char* args)
+    __attribute__((section(".icode")));
+
+/* dual boot support code */
+void x1000_dualboot_cleanup(void);
+void x1000_dualboot_init_clocktree(void);
+void x1000_dualboot_init_uart2(void);
+int x1000_dualboot_load_pdma_fw(void);
 
 /* Note: these functions are inlined to minimize SPL code size.
  * They are private to the X1000 early boot code anyway... */

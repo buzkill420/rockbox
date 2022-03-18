@@ -41,23 +41,19 @@
 #include "loader_strerror.h"
 #if defined(MI4_FORMAT)
 #include "mi4-loader.h"
-#if defined(HAVE_BOOTDATA) && !defined(SIMULATOR)
-#include "bootdata.h"
-#include "crc32.h"
-extern  int write_bootdata(unsigned char* buf, int len, unsigned int boot_volume); /*mi4-loader.c*/
-#endif
 #define LOAD_FIRMWARE(a,b,c) load_mi4(a,b,c)
 #elif defined(RKW_FORMAT)
 #include "rkw-loader.h"
 #define LOAD_FIRMWARE(a,b,c) load_rkw(a,b,c)
 #else
 #include "rb-loader.h"
+#define LOAD_FIRMWARE(a,b,c) load_firmware(a,b,c)
+#endif
+
 #if defined(HAVE_BOOTDATA) && !defined(SIMULATOR)
+#include "multiboot.h"
 #include "bootdata.h"
 #include "crc32.h"
-extern  int write_bootdata(unsigned char* buf, int len, unsigned int boot_volume); /*rb-loader.c*/
-#endif
-#define LOAD_FIRMWARE(a,b,c) load_firmware(a,b,c)
 #endif
 
 #if CONFIG_CPU == AS3525v2
@@ -133,9 +129,10 @@ static void rolo_error(const char *text)
     lcd_scroll_stop();
 }
 
-#if CONFIG_CPU == IMX31L || CONFIG_CPU == RK27XX
+#if CONFIG_CPU == IMX31L || CONFIG_CPU == RK27XX || CONFIG_CPU == X1000
 /* this is in firmware/target/arm/imx31/rolo_restart.c for IMX31 */
 /* this is in firmware/target/arm/rk27xx/rolo_restart.c for rk27xx */
+/* this is in firmware/target/mips/ingenic_x1000/boot-x1000.c for X1000 */
 extern void rolo_restart(const unsigned char* source, unsigned char* dest,
                          int length);
 #else
@@ -242,7 +239,7 @@ int rolo_load(const char* filename)
 
     /* get the system buffer. release only in case of error, otherwise
      * we don't return anyway */
-    rolo_handle = core_alloc_maximum("rolo", &filebuf_size, NULL);
+    rolo_handle = core_alloc_maximum("rolo", &filebuf_size, &buflib_ops_locked);
     if (rolo_handle < 0)
     {
         rolo_error("OOM");

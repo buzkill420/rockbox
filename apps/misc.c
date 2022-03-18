@@ -323,7 +323,10 @@ static bool clean_shutdown(void (*callback)(void *), void *parameter)
 #endif
             level = battery_level();
             if (level > 10 || level < 0)
-                splash(0, str(LANG_SHUTTINGDOWN));
+            {
+                if (global_settings.show_shutdown_message)
+                    splash(0, str(LANG_SHUTTINGDOWN));
+            }
             else
             {
                 msg_id = LANG_WARNING_BATTERY_LOW;
@@ -1381,6 +1384,24 @@ int split_string(char *str, const char split_char, char *vector[], const int vec
     return i;
 }
 
+/* returns match index from option list
+ * returns -1 if option was not found
+ * option list is array of char pointers with the final item set to null
+ * ex - const char *option[] = { "op_a", "op_b", "op_c", NULL}
+ */
+int string_option(const char *option, const char *const oplist[], bool ignore_case)
+{
+    const char *op;
+    int (*cmp_fn)(const char*, const char*) = &strcasecmp;
+    if (!ignore_case)
+        cmp_fn = strcmp;
+    for (int i=0; (op=oplist[i]) != NULL; i++)
+    {
+        if (cmp_fn(op, option) == 0)
+            return i;
+    }
+    return -1;
+}
 
 /** Open a UTF-8 file and set file descriptor to first byte after BOM.
  *  If no BOM is present this behaves like open().

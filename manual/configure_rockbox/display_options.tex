@@ -66,21 +66,21 @@
 
         \item[Settings.]
         Allows to select actions that will \emph{not} activate backlight.
-                \begin{itemize}
-                \item[Exempt Volume]
+                \begin{description}
+                \item[Exempt Volume.]
                 Volume up/down.
-                \item[Exempt Play]
+                \item[Exempt Play.]
                 Toggling Play/Pause.
-                \item[Exempt Seek]
+                \item[Exempt Seek.]
                 Seeking in a track.
-                \item[Exempt Skip]
+                \item[Exempt Skip.]
                 Skipping of a track.
                 \item[Disable Unmapped Keys.]
                 Buttons that have no action assigned and accidental button
                     combinations don't turn on backlight.
                 \item[Disable on External Power.]
                 When plugged goes back to regular behavior.
-                \end{itemize}
+                \end{description}
         Selected actions are indicated by a leading +.
         Note: If all options get de-selected, the entire feature is disabled.
         \end{description}
@@ -207,6 +207,15 @@
       When set to \setting{Yes} scrolling vertically on pages that surpass the
       screen size will page up/down instead of simply changing lines. This can be
       useful on slow displays.
+    \item[List Wraparound.]
+      When set to \setting{Yes}, scrolling will wrap around back to the opposite
+      end of a list after the first or last item has been reached.
+    \item[List Order.]
+      When set to \setting{Ascending}, numeric lists such as brightness and
+      volume will be sorted with the smallest value at the top of the list and
+      values increasing down the list. When set to \setting{Descending}, the
+      order is reversed -- the largest value is sorted at the top and values
+      will decrease down the list.
     \nopt{scrollwheel}{
       \item[List Acceleration Start Delay.]
         This setting enables the acceleration of scroll speed in lists when

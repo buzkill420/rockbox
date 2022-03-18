@@ -2,18 +2,23 @@
 #if !defined(SIMULATOR) && (CONFIG_BATTERY_MEASURE != 0)
 battery_bench.c
 #endif
+#ifdef HAVE_TAGCACHE
+db_folder_select.c
+#endif
 chessclock.c
 credits.c
 cube.c
 dict.c
 jackpot.c
 keybox.c
+keyremap.c
 logo.c
 lrcplayer.c
 mosaique.c
 main_menu_config.c
 properties.c
 random_folder_advance_config.c
+rb_info.c
 rockblox.c
 search.c
 settings_dumper.c
@@ -46,6 +51,10 @@ lamp.c
 
 #if defined(HAVE_RECORDING) && (defined(HAVE_LINE_IN) || defined(HAVE_MIC_IN))
 pitch_detector.c
+#endif
+
+#ifdef HAVE_PITCHCONTROL
+pitch_screen.c
 #endif
 
 mp3_encoder.c

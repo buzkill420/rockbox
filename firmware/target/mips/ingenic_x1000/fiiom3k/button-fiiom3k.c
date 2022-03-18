@@ -45,11 +45,11 @@
 #define STATE_SCROLLING     4
 
 /* Assume there's no active touch if no event is reported in this time */
-#define AUTORELEASE_TIME    (10000 * OST_TICKS_PER_US)
+#define AUTORELEASE_TIME    (40 * 1000 * OST_TICKS_PER_US)
 
 /* If there's no significant motion on the scrollbar for this time,
  * then report it as a button press instead */
-#define SCROLL_PRESS_TIME   (100000 * OST_TICKS_PER_US)
+#define SCROLL_PRESS_TIME   (400 * 1000 * OST_TICKS_PER_US)
 
 /* If a press on the scrollbar moves more than this during SCROLL_PRESS_TIME,
  * then we enter scrolling mode. */
@@ -318,7 +318,7 @@ static void ft_step_state(uint32_t t, int evt, int tx, int ty)
     }
 }
 
-static void ft_event_cb(int evt, int tx, int ty)
+static void ft_event_cb(struct ft6x06_state* state)
 {
     /* TODO: convert the touch positions to linear positions.
      *
@@ -327,7 +327,8 @@ static void ft_event_cb(int evt, int tx, int ty)
      * the middle of the touchpad than on the edges, so scrolling feels slow
      * in the middle and faster near the edge.
      */
-    ft_step_state(__ost_read32(), evt, tx, ty);
+    struct ft6x06_point* pt = &state->points[0];
+    ft_step_state(__ost_read32(), pt->event, pt->pos_x, pt->pos_y);
 }
 
 static void ft_init(void)

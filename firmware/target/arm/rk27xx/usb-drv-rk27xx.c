@@ -117,7 +117,7 @@ static void setup_received(void)
     setup_data[1] = SETUP2;
 
     /* pass setup data to the upper layer */
-    usb_core_control_request((struct usb_ctrlrequest*)setup_data);
+    usb_core_legacy_control_request((struct usb_ctrlrequest*)setup_data);
 }
 
 static int max_pkt_size(struct endpoint_t *endp)
@@ -355,7 +355,7 @@ int usb_drv_send_nonblocking(int endpoint, void *ptr, int length)
 }
 
 /* Setup a receive transfer. (non blocking) */
-int usb_drv_recv(int endpoint, void* ptr, int length)
+int usb_drv_recv_nonblocking(int endpoint, void* ptr, int length)
 {
     logf("udc: recv(%x)", endpoint);
     struct endpoint_t *ep;

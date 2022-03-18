@@ -69,6 +69,7 @@ static const char *selected_file = NULL;
 static char selected_file_path[MAX_PATH];
 static int selected_file_attr = 0;
 static int onplay_result = ONPLAY_OK;
+static bool (*ctx_playlist_insert)(int position, bool queue, bool create_new);
 extern struct menu_item_ex file_menu; /* settings_menu.c  */
 
 /* redefine MAKE_MENU so the MENU_EXITAFTERTHISMENU flag can be added easily */
@@ -424,11 +425,10 @@ static bool playing_time(void)
     if (global_settings.talk_menu)
         gui_synclist_set_voice_callback(&pt_lists, playing_time_speak_info);
     gui_synclist_set_nb_items(&pt_lists, 8);
+    gui_synclist_set_title(&pt_lists, str(LANG_PLAYING_TIME), NOICON);
     gui_synclist_draw(&pt_lists);
-/*    gui_syncstatusbar_draw(&statusbars, true); */
     gui_synclist_speak_item(&pt_lists);
     while (true) {
-/*        gui_syncstatusbar_draw(&statusbars, false); */
         if (list_do_action(CONTEXT_LIST, HZ/2,
                           &pt_lists, &key, LIST_WRAP_UNLESS_HELD) == 0
            && key!=ACTION_NONE && key!=ACTION_UNKNOWN)
@@ -476,7 +476,7 @@ MAKE_ONPLAYMENU( wps_playlist_menu, ID2P(LANG_PLAYLIST),
                  &playlist_save_item, &reshuffle_item, &playing_time_item
                );
 
-/* CONTEXT_[TREE|ID3DB] playlist options */
+/* CONTEXT_[TREE|ID3DB|STD] playlist options */
 static bool add_to_playlist(int position, bool queue)
 {
     bool new_playlist = false;
@@ -511,6 +511,10 @@ static bool add_to_playlist(int position, bool queue)
     if (context == CONTEXT_ID3DB)
     {
         tagtree_insert_selection_playlist(position, queue);
+    }
+    else if (context == CONTEXT_STD && ctx_playlist_insert != NULL)
+    {
+        ctx_playlist_insert(position, queue, false);
     }
     else
 #endif
@@ -567,8 +571,8 @@ static bool view_playlist(void)
 static int playlist_insert_func(void *param)
 {
     if (((intptr_t)param == PLAYLIST_REPLACE ||
-         ((intptr_t)param == PLAYLIST_INSERT_SHUFFLED && !(audio_status() & AUDIO_STATUS_PLAY))) &&
-        !warn_on_pl_erase())
+         (((intptr_t)param == PLAYLIST_INSERT_SHUFFLED || (intptr_t)param == PLAYLIST_INSERT)
+          && !(audio_status() & AUDIO_STATUS_PLAY))) && !warn_on_pl_erase())
         return 0;
     add_to_playlist((intptr_t)param, false);
     return 0;
@@ -776,8 +780,10 @@ static int treeplaylist_callback(int action,
     return action;
 }
 
-void onplay_show_playlist_menu(char* path)
+void onplay_show_playlist_menu(const char* path, void (*playlist_insert_cb))
 {
+    context = CONTEXT_STD;
+    ctx_playlist_insert = playlist_insert_cb;
     selected_file = path;
     if (dir_exists(path))
         selected_file_attr = ATTR_DIRECTORY;
@@ -825,6 +831,7 @@ MAKE_ONPLAYMENU(cat_playlist_menu, ID2P(LANG_CATALOG),
 
 void onplay_show_playlist_cat_menu(char* track_name)
 {
+    context = CONTEXT_STD;
     selected_file = track_name;
     selected_file_attr = FILE_ATTR_AUDIO;
     do_menu(&cat_playlist_menu, NULL, NULL, false);
@@ -1529,7 +1536,9 @@ MENUITEM_FUNCTION(view_cue_item, 0, ID2P(LANG_BROWSE_CUESHEET),
 
 static int browse_id3_wrapper(void)
 {
-    if (browse_id3())
+    if (browse_id3(audio_current_track(),
+            playlist_get_display_index(),
+            playlist_amount()))
         return GO_TO_ROOT;
     return GO_TO_PREVIOUS;
 }
@@ -1576,6 +1585,8 @@ static bool onplay_load_plugin(void *param)
     int ret = filetype_load_plugin((const char*)param, selected_file);
     if (ret == PLUGIN_USB_CONNECTED)
         onplay_result = ONPLAY_RELOAD_DIR;
+    else if (ret == PLUGIN_GOTO_PLUGIN)
+        onplay_result = ONPLAY_PLUGIN;
     return false;
 }
 
@@ -1584,6 +1595,11 @@ MENUITEM_FUNCTION(list_viewers_item, 0, ID2P(LANG_ONPLAY_OPEN_WITH),
 MENUITEM_FUNCTION(properties_item, MENU_FUNC_USEPARAM, ID2P(LANG_PROPERTIES),
                   onplay_load_plugin, (void *)"properties",
                   clipboard_callback, Icon_NOICON);
+#ifdef HAVE_TAGCACHE
+MENUITEM_FUNCTION(pictureflow_item, MENU_FUNC_USEPARAM, ID2P(LANG_ONPLAY_PICTUREFLOW),
+                  onplay_load_plugin, (void *)"pictureflow",
+                  clipboard_callback, Icon_NOICON);
+#endif
 static bool onplay_add_to_shortcuts(void)
 {
     shortcuts_add(SHORTCUT_BROWSER, selected_file);
@@ -1650,7 +1666,8 @@ static int clipboard_callback(int action,
             {
                 if (((selected_file_attr & FILE_ATTR_MASK) ==
                         FILE_ATTR_AUDIO) &&
-                    this_item == &properties_item)
+                    (this_item == &properties_item ||
+                     this_item == &pictureflow_item))
                     return action;
                 return ACTION_EXIT_MENUITEM;
             }
@@ -1749,6 +1766,9 @@ MAKE_ONPLAYMENU( tree_onplay_menu, ID2P(LANG_ONPLAY_MENU_TITLE),
            &set_backdrop_item,
 #endif
            &list_viewers_item, &create_dir_item, &properties_item,
+#ifdef HAVE_TAGCACHE
+           &pictureflow_item,
+#endif
 #ifdef HAVE_RECORDING
            &set_recdir_item,
 #endif
@@ -1843,7 +1863,7 @@ static struct hotkey_assignment hotkey_items[] = {
             HOTKEY_FUNC(NULL, NULL),
             ONPLAY_PLAYLIST },
     { HOTKEY_SHOW_TRACK_INFO,   LANG_MENU_SHOW_ID3_INFO,
-            HOTKEY_FUNC(browse_id3, NULL),
+            HOTKEY_FUNC(browse_id3_wrapper, NULL),
             ONPLAY_RELOAD_DIR },
 #ifdef HAVE_PITCHCONTROL
     { HOTKEY_PITCHSCREEN,       LANG_PITCH,
@@ -1926,6 +1946,7 @@ int onplay(char* file, int attr, int from, bool hotkey)
     const struct menu_item_ex *menu;
     onplay_result = ONPLAY_OK;
     context = from;
+    ctx_playlist_insert = NULL;
     if (file == NULL)
         selected_file = NULL;
     else

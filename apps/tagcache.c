@@ -118,7 +118,7 @@ static long tempbuf_pos;
 static int tempbuf_handle;
 #endif
 
-#define SORTED_TAGS_COUNT 8
+#define SORTED_TAGS_COUNT 9
 #define TAGCACHE_IS_UNIQUE(tag) (BIT_N(tag) & TAGCACHE_UNIQUE_TAGS)
 #define TAGCACHE_IS_SORTED(tag) (BIT_N(tag) & TAGCACHE_SORTED_TAGS)
 #define TAGCACHE_IS_NUMERIC_OR_NONUNIQUE(tag) \
@@ -126,18 +126,21 @@ static int tempbuf_handle;
 /* Tags we want to get sorted (loaded to the tempbuf). */
 #define TAGCACHE_SORTED_TAGS ((1LU << tag_artist) | (1LU << tag_album) | \
     (1LU << tag_genre) | (1LU << tag_composer) | (1LU << tag_comment) | \
-    (1LU << tag_albumartist) | (1LU << tag_grouping) | (1LU << tag_title))
+    (1LU << tag_albumartist) | (1LU << tag_grouping) | (1LU << tag_title) | \
+    (1LU << tag_virt_canonicalartist))
 
 /* Uniqued tags (we can use these tags with filters and conditional clauses). */
 #define TAGCACHE_UNIQUE_TAGS ((1LU << tag_artist) | (1LU << tag_album) | \
     (1LU << tag_genre) | (1LU << tag_composer) | (1LU << tag_comment) | \
-    (1LU << tag_albumartist) | (1LU << tag_grouping))
+    (1LU << tag_albumartist) | (1LU << tag_grouping) | \
+    (1LU << tag_virt_canonicalartist))
 
 /* String presentation of the tags defined in tagcache.h. Must be in correct order! */
 static const char *tags_str[] = { "artist", "album", "genre", "title",
     "filename", "composer", "comment", "albumartist", "grouping", "year",
-    "discnumber", "tracknumber", "bitrate", "length", "playcount", "rating",
-    "playtime", "lastplayed", "commitid", "mtime", "lastelapsed", "lastoffset" };
+    "discnumber", "tracknumber", "canonicalartist", "bitrate", "length",
+    "playcount", "rating", "playtime", "lastplayed", "commitid", "mtime",
+    "lastelapsed", "lastoffset" };
 
 /* Status information of the tagcache. */
 static struct tagcache_stat tc_stat;
@@ -203,7 +206,7 @@ static const char * const tagfile_entry_ec   = "ll";
 /**
  Note: This should be (1 + TAG_COUNT) amount of l's.
  */
-static const char * const index_entry_ec     = "lllllllllllllllllllllll";
+static const char * const index_entry_ec     = "llllllllllllllllllllllll";
 
 static const char * const tagcache_header_ec = "lll";
 static const char * const master_header_ec   = "llllll";
@@ -323,7 +326,9 @@ static void allocate_tempbuf(void)
     if (tempbuf)
         tempbuf_size = size;
 #else /* !__PCTOOL__ */
-    tempbuf_handle = core_alloc_maximum("tc tempbuf", &size, NULL);
+    /* Need to pass dummy ops to prevent the buffer being moved
+     * out from under us, since we yield during the tagcache commit. */
+    tempbuf_handle = core_alloc_maximum("tc tempbuf", &size, &buflib_ops_locked);
     if (tempbuf_handle > 0)
     {
         tempbuf = core_get_data(tempbuf_handle);
@@ -438,7 +443,7 @@ static int open_master_fd(struct master_header *hdr, bool write)
 
     /* Check the header. */
     rc = read(fd, hdr, sizeof(struct master_header));
-    if (hdr->tch.magic == TAGCACHE_MAGIC && rc == sizeof(struct master_header))
+    if (rc == sizeof(struct master_header) && hdr->tch.magic == TAGCACHE_MAGIC)
     {
         /* Success. */
         return fd;
@@ -448,7 +453,7 @@ static int open_master_fd(struct master_header *hdr, bool write)
     lseek(fd, 0, SEEK_SET);
 
     rc = ecread(fd, hdr, 1, master_header_ec, true);
-    if (hdr->tch.magic != TAGCACHE_MAGIC || rc != sizeof(struct master_header))
+    if (rc != sizeof(struct master_header) || hdr->tch.magic != TAGCACHE_MAGIC)
     {
         logf("header error");
         tc_stat.ready = false;
@@ -1204,7 +1209,7 @@ bool tagcache_check_clauses(struct tagcache_search *tcs,
     return check_clauses(tcs, &idx, clause, count);
 }
 
-static bool add_uniqbuf(struct tagcache_search *tcs, unsigned long id)
+static bool add_uniqbuf(struct tagcache_search *tcs, uint32_t id)
 {
     int i;
 
@@ -1215,11 +1220,53 @@ static bool add_uniqbuf(struct tagcache_search *tcs, unsigned long id)
         return true;
     }
 
-    for (i = 0; i < tcs->unique_list_count; i++)
+    if (id <= UINT16_MAX)
     {
-        /* Return false if entry is found. */
-        if (tcs->unique_list[i] == id)
-            return false;
+        /* place two 16-bit entries in a single 32-bit slot */
+        uint32_t idtmp;
+        union uentry{
+            uint16_t u16[2];
+            uint32_t u32;
+        } *entry;
+        id |= 1; /*odd - flag 16-bit entry */
+        for (i = 0; i < tcs->unique_list_count; i++)
+        {
+            entry = (union uentry *) &tcs->unique_list[i];
+            if ((entry->u32 & 1) == 0) /* contains a 32-bit entry */
+                continue;
+
+            /* Return false if entry is found. */
+            if (entry->u16[0] == id || entry->u16[1] == id)
+            {
+                logf("%d Exists (16) @ %d", id, i);
+                return false;
+            }
+  
+            if (entry->u16[1] == 0 && (entry->u16[0] & 1) == 1)
+            {
+                entry->u16[1] = id & UINT16_MAX;
+                return true; /*no more 16bit entries add to empty 16bit slot */
+            }
+
+        }
+        /* Not Found and no empty slot add a new entry */
+        entry = (union uentry *) &idtmp;
+        entry->u16[1] = 0;
+        entry->u16[0] = id & UINT16_MAX;
+        id = idtmp;
+    }
+    else
+    {
+        id &= ~1; /* even - flag 32-bit entry */
+        for (i = 0; i < tcs->unique_list_count; i++)
+        {
+            /* Return false if entry is found. */
+            if (tcs->unique_list[i] == id)
+            {
+                logf("%d Exists (32)@ %d", id, i);
+                return false;
+            }
+        }
     }
 
     if (tcs->unique_list_count < tcs->unique_list_capacity)
@@ -1465,9 +1512,10 @@ bool tagcache_search(struct tagcache_search *tcs, int tag)
 void tagcache_search_set_uniqbuf(struct tagcache_search *tcs,
                                  void *buffer, long length)
 {
-    tcs->unique_list = (unsigned long *)buffer;
+    tcs->unique_list = (uint32_t *)buffer;
     tcs->unique_list_capacity = length / sizeof(*tcs->unique_list);
     tcs->unique_list_count = 0;
+    memset(tcs->unique_list, 0, tcs->unique_list_capacity);
 }
 
 bool tagcache_search_add_filter(struct tagcache_search *tcs,
@@ -1490,8 +1538,9 @@ bool tagcache_search_add_clause(struct tagcache_search *tcs,
                                 struct tagcache_search_clause *clause)
 {
     int i;
+    int clause_count = tcs->clause_count;
 
-    if (tcs->clause_count >= TAGCACHE_MAX_CLAUSES)
+    if (clause_count >= TAGCACHE_MAX_CLAUSES)
     {
         logf("Too many clauses");
         return false;
@@ -1499,13 +1548,19 @@ bool tagcache_search_add_clause(struct tagcache_search *tcs,
 
     if (clause->type != clause_logical_or)
     {
-        /* Check if there is already a similar filter in present (filters are
-         * much faster than clauses).
-         */
-        for (i = 0; i < tcs->filter_count; i++)
+        /* BUGFIX OR'd clauses seem to be mishandled once made into a filter */
+        if (clause_count <= 1 || tcs->clause[clause_count - 1]->type != clause_logical_or)
         {
-            if (tcs->filter_tag[i] == clause->tag)
-                return true;
+            /* Check if there is already a similar filter in present (filters are
+             * much faster than clauses).
+             */
+            for (i = 0; i < tcs->filter_count; i++)
+            {
+                if (tcs->filter_tag[i] == clause->tag)
+                {
+                    return true;
+                }
+            }
         }
 
         if (!TAGCACHE_IS_NUMERIC(clause->tag) && tcs->idxfd[clause->tag] < 0)
@@ -1689,6 +1744,11 @@ bool tagcache_get_next(struct tagcache_search *tcs)
         if (tcs->result_len > 1)
             return true;
     }
+
+#ifdef LOGF_ENABLE
+    if (tcs->unique_list_count > 0)
+        logf(" uniqbuf: %d used / %d avail", tcs->unique_list_count, tcs->unique_list_capacity);
+#endif
 
     return false;
 }
@@ -1896,7 +1956,7 @@ static void NO_INLINE add_tagcache(char *path, unsigned long mtime)
     char tracknumfix[3];
     int offset = 0;
     int path_length = strlen(path);
-    bool has_albumartist;
+    bool has_artist;
     bool has_grouping;
 
 #ifdef SIMULATOR
@@ -1995,11 +2055,11 @@ static void NO_INLINE add_tagcache(char *path, unsigned long mtime)
     entry.tag_offset[tag_bitrate] = id3.bitrate;
     entry.tag_offset[tag_mtime] = mtime;
 
-   
-    
-       
-    
-     
+    /* String tags. */
+    has_artist = id3.artist != NULL
+        && strlen(id3.artist) > 0;
+    has_grouping = id3.grouping != NULL
+        && strlen(id3.grouping) > 0;
 
     ADD_TAG(entry, tag_filename, &path);
     ADD_TAG(entry, tag_title, &id3.title);
@@ -2008,22 +2068,23 @@ static void NO_INLINE add_tagcache(char *path, unsigned long mtime)
     ADD_TAG(entry, tag_genre, &id3.genre_string);
     ADD_TAG(entry, tag_composer, &id3.composer);
     ADD_TAG(entry, tag_comment, &id3.comment);
-    
-    
     ADD_TAG(entry, tag_albumartist, &id3.albumartist);
-    
-    
-    
-   
-    
-    
-    
-    ADD_TAG(entry, tag_grouping, &id3.grouping);
-    
-   
-    
-       
-    
+    if (has_artist)
+    {
+        ADD_TAG(entry, tag_virt_canonicalartist, &id3.artist);
+    }
+    else
+    {
+        ADD_TAG(entry, tag_virt_canonicalartist, &id3.albumartist);
+    }
+    if (has_grouping)
+    {
+        ADD_TAG(entry, tag_grouping, &id3.grouping);
+    }
+    else
+    {
+        ADD_TAG(entry, tag_grouping, &id3.title);
+    }
     entry.data_length = offset;
 
     /* Write the header */
@@ -2037,22 +2098,23 @@ static void NO_INLINE add_tagcache(char *path, unsigned long mtime)
     write_item(id3.genre_string);
     write_item(id3.composer);
     write_item(id3.comment);
-    
-    
     write_item(id3.albumartist);
-    
-    
-    
-        
-    
-    
-    
-    write_item(id3.grouping);
-    
-    
-    
-    
-    
+    if (has_artist)
+    {
+        write_item(id3.artist);
+    }
+    else
+    {
+        write_item(id3.albumartist);
+    }
+    if (has_grouping)
+    {
+        write_item(id3.grouping);
+    }
+    else
+    {
+        write_item(id3.title);
+    }
 
     total_entry_count++;
 
@@ -3921,13 +3983,13 @@ static void fix_ramcache(void* old_addr, void* new_addr)
 
 static int move_cb(int handle, void* current, void* new)
 {
+    (void)handle;
     if (tcramcache.move_lock > 0)
         return BUFLIB_CB_CANNOT_MOVE;
 
     fix_ramcache(current, new);
     tcramcache.hdr = new;
     return BUFLIB_CB_OK;
-    (void)handle;
 }
 
 static struct buflib_callbacks ops = {

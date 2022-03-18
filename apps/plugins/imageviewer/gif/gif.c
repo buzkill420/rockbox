@@ -72,7 +72,7 @@ static void draw_image_rect(struct image_info *info,
 static int img_mem(int ds)
 {
     struct gif_decoder *p_decoder = &decoder;
-    return p_decoder->native_img_size/ds;
+    return (p_decoder->native_img_size/ds + 3) & ~3;
 }
 
 static int load_image(char *filename, struct image_info *info,
@@ -132,6 +132,8 @@ static int load_image(char *filename, struct image_info *info,
             time = *rb->current_tick - time;
         }
 
+    gif_decoder_destroy_memory_pool(p_decoder);
+
     if (!iv->running_slideshow && !p_decoder->error)
     {
         rb->snprintf(print, sizeof(print), " %ld.%02ld sec ", time/HZ, time%HZ);
@@ -142,6 +144,9 @@ static int load_image(char *filename, struct image_info *info,
 
     if (p_decoder->error)
     {
+        if (p_decoder->error == D_GIF_ERR_NOT_ENOUGH_MEM)
+            return PLUGIN_OUTOFMEM;
+
         rb->splashf(HZ, "%s", GifErrorString(p_decoder->error));
         return PLUGIN_ERROR;
     }
@@ -157,12 +162,9 @@ static int load_image(char *filename, struct image_info *info,
     img_size = (p_decoder->native_img_size*p_decoder->frames_count + 3) & ~3;
     disp_size = (sizeof(unsigned char *)*p_decoder->frames_count*4 + 3) & ~3;
 
+    /* No memory to allocate disp matrix */
     if (memory_size < img_size + disp_size)
-    {
-        /* No memory to allocate disp matrix */
-        rb->splashf(HZ, "%s", GifErrorString(D_GIF_ERR_NOT_ENOUGH_MEM));
-        return PLUGIN_ERROR;
-    }
+        return PLUGIN_OUTOFMEM;
 
     disp = (unsigned char **)(p_decoder->mem + img_size);
     disp_buf = (unsigned char *)disp + disp_size;
@@ -210,7 +212,7 @@ static int get_image(struct image_info *info, int frame, int ds)
     /* assign image buffer */
     if (ds > 1)
     {
-        if (!iv->running_slideshow)
+        if (!iv->running_slideshow && (info->frames_count == 1))
         {
             rb->lcd_putsf(0, 3, "resizing %d*%d", info->width, info->height);
             rb->lcd_update();

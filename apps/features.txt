@@ -105,6 +105,10 @@ radio_remote
 #endif
 #endif
 
+#if defined(HAVE_RDS_CAP)
+rds
+#endif
+
 #if defined(HAVE_RECORDING)
 recording
 #if defined(HAVE_LINE_IN)
@@ -262,6 +266,8 @@ recording_digital
 
 #if MEMORYSIZE <= 2
 lowmem
+#elif MEMORYSIZE > 8
+himem
 #endif
 
 #if defined(HAVE_HARDWARE_CLICK)

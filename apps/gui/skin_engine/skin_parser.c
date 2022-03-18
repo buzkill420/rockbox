@@ -343,11 +343,12 @@ static int parse_image_display(struct skin_element *element,
 
     if (element->params_count > 1)
     {
-        if (get_param(element, 1)->type == CODE)
+        struct skin_tag_parameter *param1 = get_param(element, 1);
+        if (param1->type == CODE)
             id->token = get_param_code(element, 1)->data;
         /* specify a number. 1 being the first subimage (i.e top) NOT 0 */
-        else if (get_param(element, 1)->type == INTEGER)
-            id->subimage = get_param(element, 1)->data.number - 1;
+        else if (param1->type == INTEGER)
+            id->subimage = param1->data.number - 1;
         if (element->params_count > 2)
             id->offset = get_param(element, 2)->data.number;
     }
@@ -391,14 +392,16 @@ static int parse_image_load(struct skin_element *element,
         subimages = get_param(element, 2)->data.number;
     else if (element->params_count > 3)
     {
-        if (get_param(element, 2)->type == PERCENT)
-            x = get_param(element, 2)->data.number * curr_vp->vp.width / 1000;
+        struct skin_tag_parameter *param2 = get_param(element, 2);
+        struct skin_tag_parameter *param3 = get_param(element, 3);
+        if (param2->type == PERCENT)
+            x = param2->data.number * curr_vp->vp.width / 1000;
         else
-            x = get_param(element, 2)->data.number;
-        if (get_param(element, 3)->type == PERCENT)
-            y = get_param(element, 3)->data.number * curr_vp->vp.height / 1000;
+            x = param2->data.number;
+        if (param3->type == PERCENT)
+            y = param3->data.number * curr_vp->vp.height / 1000;
         else
-            y = get_param(element, 3)->data.number;
+            y = param3->data.number;
 
         if (element->params_count == 5)
             subimages = get_param(element, 4)->data.number;
@@ -561,6 +564,7 @@ static int parse_listitemviewport(struct skin_element *element,
                                   struct wps_data *wps_data)
 {
 #ifndef __PCTOOL__
+    struct skin_tag_parameter *param;
     struct listitem_viewport_cfg *cfg = skin_buffer_alloc(sizeof(*cfg));
     if (!cfg)
         return -1;
@@ -569,10 +573,15 @@ static int parse_listitemviewport(struct skin_element *element,
     cfg->label = PTRTOSKINOFFSET(skin_buffer, get_param_text(element, 0));
     cfg->width = -1;
     cfg->height = -1;
-    if (!isdefault(get_param(element, 1)))
-        cfg->width = get_param(element, 1)->data.number;
-    if (!isdefault(get_param(element, 2)))
-        cfg->height = get_param(element, 2)->data.number;
+
+    param = get_param(element, 1);
+    if (!isdefault(param))
+        cfg->width = param->data.number;
+
+    param = get_param(element, 2);
+    if (!isdefault(param))
+        cfg->height = param->data.number;
+
     if (element->params_count > 3 &&
         !strcmp(get_param_text(element, 3), "tile"))
         cfg->tile = true;
@@ -592,11 +601,16 @@ static int parse_viewporttextstyle(struct skin_element *element,
     *line = (struct line_desc)LINE_DESC_DEFINIT;
     unsigned colour;
 
-    if (!strcmp(mode, "invert"))
+    static const char *vp_options[] = { "invert", "color", "colour",
+                                 "clear", "gradient", NULL};
+
+    int vp_op = string_option(mode, vp_options, false);
+
+    if (vp_op == 0) /*invert*/
     {
         line->style = STYLE_INVERT;
     }
-    else if (!strcmp(mode, "colour") || !strcmp(mode, "color"))
+    else if (vp_op == 1 || vp_op == 2) /*color/colour*/
     {
         if (element->params_count < 2 ||
             !parse_color(curr_screen, get_param_text(element, 1), &colour))
@@ -605,7 +619,7 @@ static int parse_viewporttextstyle(struct skin_element *element,
         line->text_color = colour;
     }
 #ifdef HAVE_LCD_COLOR
-    else if (!strcmp(mode, "gradient"))
+    else if (vp_op == 4) /*gradient*/
     {
         int num_lines;
         if (element->params_count < 2)
@@ -618,7 +632,7 @@ static int parse_viewporttextstyle(struct skin_element *element,
         line->nlines = num_lines;
     }
 #endif
-    else if (!strcmp(mode, "clear"))
+    else if (vp_op == 3) /*clear*/
     {
         line->style = STYLE_DEFAULT;
     }
@@ -634,34 +648,39 @@ static int parse_drawrectangle( struct skin_element *element,
                                 struct wps_data *wps_data)
 {
     (void)wps_data;
+    struct skin_tag_parameter *param;
     struct draw_rectangle *rect = skin_buffer_alloc(sizeof(*rect));
 
     if (!rect)
         return -1;
 
-    if (get_param(element, 0)->type == PERCENT)
-        rect->x = get_param(element, 0)->data.number * curr_vp->vp.width / 1000;
+    param = get_param(element, 0);
+    if (param->type == PERCENT)
+        rect->x = param->data.number * curr_vp->vp.width / 1000;
     else
-        rect->x = get_param(element, 0)->data.number;
+        rect->x = param->data.number;
 
-    if (get_param(element, 1)->type == PERCENT)
-        rect->y = get_param(element, 1)->data.number * curr_vp->vp.height / 1000;
+    param = get_param(element, 1);
+    if (param->type == PERCENT)
+        rect->y = param->data.number * curr_vp->vp.height / 1000;
     else
-        rect->y = get_param(element, 1)->data.number;
+        rect->y = param->data.number;
 
-    if (isdefault(get_param(element, 2)))
+    param = get_param(element, 2);
+    if (isdefault(param))
         rect->width = curr_vp->vp.width - rect->x;
-    else if (get_param(element, 2)->type == PERCENT)
-        rect->width = get_param(element, 2)->data.number * curr_vp->vp.width / 1000;
+    else if (param->type == PERCENT)
+        rect->width = param->data.number * curr_vp->vp.width / 1000;
     else
-        rect->width = get_param(element, 2)->data.number;
+        rect->width = param->data.number;
 
-    if (isdefault(get_param(element, 3)))
+    param = get_param(element, 3);
+    if (isdefault(param))
         rect->height = curr_vp->vp.height - rect->y;
-    else if (get_param(element, 3)->type == PERCENT)
-        rect->height = get_param(element, 3)->data.number * curr_vp->vp.height / 1000;
+    else if (param->type == PERCENT)
+        rect->height = param->data.number * curr_vp->vp.height / 1000;
     else
-        rect->height = get_param(element, 3)->data.number;
+        rect->height = param->data.number;
 
     rect->start_colour = curr_vp->vp.fg_pattern;
     rect->end_colour = curr_vp->vp.fg_pattern;
@@ -768,7 +787,7 @@ static int parse_setting_and_lang(struct skin_element *element,
 #ifndef __PCTOOL__
         i = lang_english_to_id(temp);
         if (i < 0)
-            return WPS_ERROR_INVALID_PARAM;
+            i = LANG_LAST_INDEX_IN_ARRAY;
 #endif
     }
     else if (element->params_count > 1)
@@ -811,19 +830,38 @@ static int parse_logical_if(struct skin_element *element,
     token->value.data = PTRTOSKINOFFSET(skin_buffer, lif);
     lif->token = get_param_code(element, 0)->data;
 
-    if (!strncmp(op, "=", 1))
-        lif->op = IF_EQUALS;
-    else if (!strncmp(op, "!=", 2))
-        lif->op = IF_NOTEQUALS;
-    else if (!strncmp(op, ">=", 2))
-        lif->op = IF_GREATERTHAN_EQ;
-    else if (!strncmp(op, "<=", 2))
-        lif->op = IF_LESSTHAN_EQ;
-    else if (!strncmp(op, ">", 2))
-        lif->op = IF_GREATERTHAN;
-    else if (!strncmp(op, "<", 1))
-        lif->op = IF_LESSTHAN;
+    /* one or two operator conditionals */
+    #define OPS2VAL(op1, op2) ((int)op1 << 8 | (int)op2)
+    #define CLAUSE(op1, op2, symbol) {OPS2VAL(op1, op2), symbol }
 
+    struct clause_symbol {int value;int symbol;};
+    static const struct clause_symbol get_clause_match[] =
+    {
+        CLAUSE('=', '=', IF_EQUALS),
+        CLAUSE('!', '=', IF_NOTEQUALS),
+        CLAUSE('>', '=', IF_GREATERTHAN_EQ),
+        CLAUSE('<', '=', IF_LESSTHAN_EQ),
+        /*All Single value items @ end */
+        CLAUSE('>', 0, IF_GREATERTHAN),
+        CLAUSE('<', 0, IF_LESSTHAN),
+        CLAUSE('=', 0, IF_EQUALS),
+    };
+
+    int val1 = OPS2VAL(op[0], 0);
+    int val2;
+    if (val1 != 0) /* Empty string ?*/
+    {
+        val2 = OPS2VAL(op[0], op[1]);
+        for (unsigned int i = 0; i < ARRAYLEN(get_clause_match); i++)
+        {
+            const struct clause_symbol *sym = &get_clause_match[i];
+            if(sym->value == val1 || sym->value == val2)
+            {
+                lif->op = sym->symbol;
+                break;
+            }
+        }
+    }
     memcpy(&lif->operand, get_param(element, 2), sizeof(lif->operand));
     if (element->params_count > 3)
         lif->num_options = get_param(element, 3)->data.number;
@@ -1009,20 +1047,37 @@ static int parse_progressbar_tag(struct skin_element* element,
     }
 
     pb->horizontal = pb->width > pb->height;
+
+    enum
+    {
+        eINVERT = 0, eNOFILL, eNOBORDER, eNOBAR, eSLIDER, eIMAGE,
+        eBACKDROP, eVERTICAL, eHORIZONTAL, eNOTOUCH, eSETTING, 
+        e_PB_TAG_COUNT
+    };
+
+    static const char *pb_options[e_PB_TAG_COUNT + 1] = {[eINVERT] = "invert",
+                 [eNOFILL] = "nofill", [eNOBORDER] = "noborder", [eNOBAR] = "nobar",
+                 [eSLIDER] = "slider", [eIMAGE] = "image", [eBACKDROP] = "backdrop",
+                 [eVERTICAL] = "vertical", [eHORIZONTAL] = "horizontal",
+                 [eNOTOUCH] = "notouch", [eSETTING] = "setting", [e_PB_TAG_COUNT] = NULL};
+    int pb_op;
+
     while (curr_param < element->params_count)
     {
         char* text;
         param++;
         text = SKINOFFSETTOPTR(skin_buffer, param->data.text);
-        if (!strcmp(text, "invert"))
+
+        pb_op = string_option(text, pb_options, false);
+        if (pb_op == eINVERT)
             pb->invert_fill_direction = true;
-        else if (!strcmp(text, "nofill"))
+        else if (pb_op == eNOFILL)
             pb->nofill = true;
-        else if (!strcmp(text, "noborder"))
+        else if (pb_op == eNOBORDER)
             pb->noborder = true;
-        else if (!strcmp(text, "nobar"))
+        else if (pb_op == eNOBAR)
             pb->nobar = true;
-        else if (!strcmp(text, "slider"))
+        else if (pb_op == eSLIDER)
         {
             if (curr_param+1 < element->params_count)
             {
@@ -1035,7 +1090,7 @@ static int parse_progressbar_tag(struct skin_element* element,
             else /* option needs the next param */
                 return -1;
         }
-        else if (!strcmp(text, "image"))
+        else if (pb_op == eIMAGE)
         {
             if (curr_param+1 < element->params_count)
             {
@@ -1046,7 +1101,7 @@ static int parse_progressbar_tag(struct skin_element* element,
             else /* option needs the next param */
                 return -1;
         }
-        else if (!strcmp(text, "backdrop"))
+        else if (pb_op == eBACKDROP)
         {
             if (curr_param+1 < element->params_count)
             {
@@ -1060,31 +1115,31 @@ static int parse_progressbar_tag(struct skin_element* element,
             else /* option needs the next param */
                 return -1;
         }
-        else if (!strcmp(text, "vertical"))
+        else if (pb_op == eVERTICAL)
         {
             pb->horizontal = false;
             if (isdefault(get_param(element, 3)))
                 pb->height = vp->height - pb->y;
         }
-        else if (!strcmp(text, "horizontal"))
+        else if (pb_op == eHORIZONTAL)
             pb->horizontal = true;
 #ifdef HAVE_TOUCHSCREEN
-        else if (!strcmp(text, "notouch"))
+        else if (pb_op == eNOTOUCH)
             suppress_touchregion = true;
 #endif
-		else if (token->type == SKIN_TOKEN_SETTING && !strcmp(text, "setting"))
-		{
+        else if (token->type == SKIN_TOKEN_SETTING && pb_op == eSETTING)
+        {
             if (curr_param+1 < element->params_count)
             {
                 curr_param++;
                 param++;
                 text = SKINOFFSETTOPTR(skin_buffer, param->data.text);
 #ifndef __PCTOOL__
-				if (find_setting_by_cfgname(text, &pb->setting_id) == NULL)
-					return WPS_ERROR_INVALID_PARAM;
+                if (find_setting_by_cfgname(text, &pb->setting_id) == NULL)
+                    return WPS_ERROR_INVALID_PARAM;
 #endif
-			}
-		}
+            }
+        }
         else if (curr_param == 4)
             image_filename = text;
 
@@ -1187,7 +1242,7 @@ static int parse_progressbar_tag(struct skin_element* element,
         region->reverse_bar = false;
         region->allow_while_locked = false;
         region->press_length = PRESS;
-        region->last_press = 0xffff;
+        region->last_press = -1;
         region->armed = false;
         region->bar = PTRTOSKINOFFSET(skin_buffer, pb);
 
@@ -1219,22 +1274,27 @@ static int parse_albumart_load(struct skin_element* element,
     aa->xalign = WPS_ALBUMART_ALIGN_CENTER; /* default */
     aa->yalign = WPS_ALBUMART_ALIGN_CENTER; /* default */
 
-    aa->x = get_param(element, 0)->data.number;
-    aa->y = get_param(element, 1)->data.number;
-    aa->width = get_param(element, 2)->data.number;
-    aa->height = get_param(element, 3)->data.number;
+    struct skin_tag_parameter *param0 = get_param(element, 0);
+    struct skin_tag_parameter *param1 = get_param(element, 1);
+    struct skin_tag_parameter *param2 = get_param(element, 2);
+    struct skin_tag_parameter *param3 = get_param(element, 3);
 
-    if (!isdefault(get_param(element, 0)) && get_param(element, 0)->type == PERCENT)
-        aa->x = get_param(element, 0)->data.number * curr_vp->vp.width / 1000;
+    aa->x = param0->data.number;
+    aa->y = param1->data.number;
+    aa->width = param2->data.number;
+    aa->height = param3->data.number;
 
-    if (!isdefault(get_param(element, 1)) && get_param(element, 1)->type == PERCENT)
-        aa->y = get_param(element, 1)->data.number * curr_vp->vp.height / 1000;
+    if (!isdefault(param0) && param0->type == PERCENT)
+        aa->x = param0->data.number * curr_vp->vp.width / 1000;
 
-    if (!isdefault(get_param(element, 2)) && get_param(element, 2)->type == PERCENT)
-        aa->width = get_param(element, 2)->data.number * curr_vp->vp.width / 1000;
+    if (!isdefault(param1) && param1->type == PERCENT)
+        aa->y = param1->data.number * curr_vp->vp.height / 1000;
 
-    if (!isdefault(get_param(element, 3)) && get_param(element, 3)->type == PERCENT)
-        aa->height = get_param(element, 3)->data.number * curr_vp->vp.height / 1000;
+    if (!isdefault(param2) && param2->type == PERCENT)
+        aa->width = param2->data.number * curr_vp->vp.width / 1000;
+
+    if (!isdefault(param3) && param3->type == PERCENT)
+        aa->height = param3->data.number * curr_vp->vp.height / 1000;
 
     aa->vp = PTRTOSKINOFFSET(skin_buffer, &curr_vp->vp);
     aa->draw_handle = -1;
@@ -1341,27 +1401,32 @@ static int parse_skinvar(  struct skin_element *element,
             return 0;
         case SKIN_TOKEN_VAR_SET:
         {
+            static const char *sv_options[] = {"touch", "set", "inc", "dec", NULL};
+
             struct skin_var_changer *data = skin_buffer_alloc(sizeof(*data));
             if (!data)
                 return WPS_ERROR_INVALID_PARAM;
             data->var = PTRTOSKINOFFSET(skin_buffer, var);
+            char *text_param1 = get_param_text(element, 1);
+            int sv_op = string_option(text_param1, sv_options, false);
+
             if (!isdefault(get_param(element, 2)))
                 data->newval = get_param(element, 2)->data.number;
-            else if (strcmp(get_param_text(element, 1), "touch"))
+            else if (sv_op != 0) /*!touch*/
                 return WPS_ERROR_INVALID_PARAM;
             data->max = 0;
-            if (!strcmp(get_param_text(element, 1), "set"))
+            if (sv_op == 1) /*set*/
                 data->direct = true;
-            else if (!strcmp(get_param_text(element, 1), "inc"))
+            else if (sv_op == 2) /*inc*/
             {
                 data->direct = false;
             }
-            else if (!strcmp(get_param_text(element, 1), "dec"))
+            else if (sv_op == 3) /*dec*/
             {
                 data->direct = false;
                 data->newval *= -1;
             }
-            else if (!strcmp(get_param_text(element, 1), "touch"))
+            else if (sv_op == 0) /*touch*/
             {
                 data->direct = false;
                 data->newval = 0;
@@ -1403,12 +1468,12 @@ static int parse_lasttouch(struct skin_element *element,
 
     for (i=0; i<element->params_count; i++)
     {
-        if (get_param(element, i)->type == STRING)
+        struct skin_tag_parameter *param = get_param(element, i);
+        if (param->type == STRING)
             region = skin_find_item(get_param_text(element, i),
                                           SKIN_FIND_TOUCHREGION, wps_data);
-        else if (get_param(element, i)->type == INTEGER ||
-                 get_param(element, i)->type == DECIMAL)
-            data->timeout = get_param(element, i)->data.number;
+        else if (param->type == INTEGER || param->type == DECIMAL)
+            data->timeout = param->data.number;
     }
 
     data->region = PTRTOSKINOFFSET(skin_buffer, region);
@@ -1602,7 +1667,7 @@ static int parse_touchregion(struct skin_element *element,
     region->armed = false;
     region->reverse_bar = false;
     region->value = 0;
-    region->last_press = 0xffff;
+    region->last_press = -1;
     region->press_length = PRESS;
     region->allow_while_locked = false;
     region->bar = PTRTOSKINOFFSET(skin_buffer, NULL);
@@ -1640,16 +1705,21 @@ static int parse_touchregion(struct skin_element *element,
         if (region->action == ACTION_NONE)
             return WPS_ERROR_INVALID_PARAM;
     }
+    static const char *pm_options[] = {"allow_while_locked", "reverse_bar",
+                                "repeat_press", "long_press", NULL};
+    int pm_op;
+
     while (p < element->params_count)
     {
         char* param = get_param_text(element, p++);
-        if (!strcmp(param, "allow_while_locked"))
+        pm_op = string_option(param, pm_options, false);
+        if (pm_op == 0)
             region->allow_while_locked = true;
-        else if (!strcmp(param, "reverse_bar"))
+        else if (pm_op == 1)
             region->reverse_bar = true;
-        else if (!strcmp(param, "repeat_press"))
+        else if (pm_op == 2)
             region->press_length = REPEAT;
-        else if (!strcmp(param, "long_press"))
+        else if (pm_op == 3)
             region->press_length = LONG_PRESS;
     }
     struct skin_token_list *item = new_skin_token_list_item(NULL, region);
