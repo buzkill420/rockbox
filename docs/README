@@ -6,6 +6,8 @@
                        \/            \/     \/    \/            \/
 
 Build Your Own Rockbox
+0. Open Windows Ubuntu in Rockbox directory
+
 
 1. Clone 'rockbox' from git (or extract a downloaded archive).
 
